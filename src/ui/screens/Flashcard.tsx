@@ -34,6 +34,21 @@ export function swipeGrade(axis: Axis, d: number): Grade {
   return d > 0 ? 1 : 4;
 }
 
+type Side = 'top' | 'bottom' | 'left' | 'right';
+
+/** スワイプ方向の目印（6-4）。カードの四辺のすぐ外側に常時表示する */
+export const SWIPE_GUIDES: ReadonlyArray<{ grade: Grade; side: Side; text: string }> = [
+  { grade: 4, side: 'top', text: '↑ Easy' },
+  { grade: 1, side: 'bottom', text: '↓ Again' },
+  { grade: 2, side: 'left', text: '← Hard' },
+  { grade: 3, side: 'right', text: '→ Good' },
+];
+
+/** スワイプ中の評価名を出す領域: 下（Again）はカードが下がって直下の領域を隠すので上側、それ以外はカードの直下 */
+export function labelSide(grade: Grade): 'top' | 'bottom' {
+  return grade === 1 ? 'top' : 'bottom';
+}
+
 /**
  * スワイプ中の見た目（6-4）。progress は移動量 ÷ 120px を 0〜1 に丸めたもの。
  * 評価色は文字の下に敷き、不透明度は 0 から 0.85 まで。0.4 を超えたら文字を白にして色の上でも読めるようにする
@@ -159,6 +174,13 @@ export function Flashcard() {
     }
   }
   const cardClass = `study-card${anim === 'leave' ? ' leave' : anim === 'settle' ? ' settle' : ''}${dragGrade && visual.whiteText ? ' on-color' : ''}`;
+  // スワイプ中の評価名。上側か直下のどちらか一方に出す
+  const swipeLabel = dragGrade ? (
+    <span className={`swipe-grade text-grade-${dragGrade}`} data-testid="swipe-label">
+      {GRADE_NAMES[dragGrade]}
+    </span>
+  ) : null;
+  const side = dragGrade ? labelSide(dragGrade) : null;
 
   return (
     <div className="screen study-screen">
@@ -193,44 +215,57 @@ export function Flashcard() {
 
       {word && (
         <div className="card-stage">
-          <div
-            ref={cardRef}
-            className={cardClass}
-            role="button"
-            tabIndex={0}
-            aria-label={flipped ? '裏面' : '表面。タップで答えを表示。スワイプで評価'}
-            data-testid="study-card"
-            data-flipped={flipped}
-            data-swipe-grade={dragGrade ?? undefined}
-            onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-            onPointerUp={onPointerUp}
-            onPointerCancel={onPointerCancel}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') setFlipped(true);
-            }}
-            onDragStart={(e) => e.preventDefault()}
-            style={transform ? { transform } : undefined}
-          >
-            {/* 評価色はカードの背景として文字の下に敷く（z-index: -1）。評価名はカードに重ねず、下の 1 行に出す */}
-            {dragGrade && <div className={`swipe-fill grade-${dragGrade}`} style={{ opacity: visual.fillOpacity }} aria-hidden="true" />}
-            {flipped ? (
-              <>
-                <div className="study-term small">{word.englishTerm}</div>
-                <div className="study-def">{word.japaneseDefinition}</div>
-                {word.memo && <div className="study-memo">{word.memo}</div>}
-              </>
-            ) : (
-              <div className="study-term">{word.englishTerm}</div>
-            )}
+          {/* カード上側の高さ固定の 1 行: 下（Again）のスワイプ中だけ評価名を出し、それ以外は空 */}
+          <div className="card-status" data-testid="card-status-top">
+            {side === 'top' ? swipeLabel : null}
           </div>
-          {/* カード直下の高さ固定の 1 行: 表面は案内文、裏面は空。スワイプ中は評価名を評価色で出し、指を離したら戻す */}
-          <div className="card-status" data-testid="card-status">
-            {dragGrade ? (
-              <span className={`swipe-grade text-grade-${dragGrade}`} data-testid="swipe-label">
-                {GRADE_NAMES[dragGrade]}
+          <div className="card-frame">
+            {/* 四辺の目印。カードの外にあるので追従せず、pointer-events: none で判定にも関わらない */}
+            {SWIPE_GUIDES.map((g) => (
+              <span
+                key={g.grade}
+                className={`swipe-guide ${g.side} text-grade-${g.grade}${dragGrade === g.grade ? ' active' : ''}`}
+                aria-hidden="true"
+                data-testid={`guide-${g.grade}`}
+              >
+                {g.text}
               </span>
-            ) : flipped ? null : (
+            ))}
+            <div
+              ref={cardRef}
+              className={cardClass}
+              role="button"
+              tabIndex={0}
+              aria-label={flipped ? '裏面' : '表面。タップで答えを表示。スワイプで評価'}
+              data-testid="study-card"
+              data-flipped={flipped}
+              data-swipe-grade={dragGrade ?? undefined}
+              onPointerDown={onPointerDown}
+              onPointerMove={onPointerMove}
+              onPointerUp={onPointerUp}
+              onPointerCancel={onPointerCancel}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') setFlipped(true);
+              }}
+              onDragStart={(e) => e.preventDefault()}
+              style={transform ? { transform } : undefined}
+            >
+              {/* 評価色はカードの背景として文字の下に敷く（z-index: -1）。評価名はカードに重ねず、下の 1 行に出す */}
+              {dragGrade && <div className={`swipe-fill grade-${dragGrade}`} style={{ opacity: visual.fillOpacity }} aria-hidden="true" />}
+              {flipped ? (
+                <>
+                  <div className="study-term small">{word.englishTerm}</div>
+                  <div className="study-def">{word.japaneseDefinition}</div>
+                  {word.memo && <div className="study-memo">{word.memo}</div>}
+                </>
+              ) : (
+                <div className="study-term">{word.englishTerm}</div>
+              )}
+            </div>
+          </div>
+          {/* カード直下の高さ固定の 1 行: 表面は案内文、裏面は空。上・左・右のスワイプ中は評価名を評価色で出し、指を離したら戻す */}
+          <div className="card-status" data-testid="card-status">
+            {side === 'bottom' ? swipeLabel : side === 'top' || flipped ? null : (
               <span className="study-hint" data-testid="front-hint">
                 タップで答えを表示。スワイプで評価
               </span>

@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Header } from '../components/Header';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ImportScreen } from './Import';
+import { movedMessage } from './WordList';
 import { errorMessage } from '../hooks';
 import { createWord, deleteWord, getWord, listFolders, updateWordText } from '../../db/repo';
 import { updateBadge } from '../../app/badge';
@@ -72,7 +73,10 @@ export function WordForm() {
         await createWord({ folderId: form.folderId, ...value });
         await updateBadge();
       }
-      navigate(savedTo, { replace: true });
+      // 編集でフォルダを変えたときは、移動先の一覧で「1件を「フォルダ名」に移動しました」を出す（7-4）
+      const dest = folders.find((f) => f.id === form.folderId);
+      const moved = isEdit && form.folderId !== initial.folderId && dest != null;
+      navigate(savedTo, { replace: true, state: moved ? { toast: movedMessage(1, dest.name) } : null });
     } catch (e) {
       setMessage(errorMessage(e));
     }
