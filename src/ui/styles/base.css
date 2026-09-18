@@ -176,14 +176,6 @@ button:disabled,
   padding: 16px;
 }
 
-.card.tappable {
-  cursor: pointer;
-  width: 100%;
-  text-align: left;
-  display: block;
-  color: inherit;
-}
-
 .card h2 {
   margin: 0 0 4px;
   font-size: 18px;
@@ -192,6 +184,35 @@ button:disabled,
 .card p {
   margin: 0;
   color: var(--muted);
+}
+
+/* ホームのサマリーカード（7-2）: 見出し 1 行 + ボタン。復習あり / New ありの 2 状態は同じ配色・同じ大きさ */
+.summary-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* 見出しは 2 行分の高さを確保し、折り返しの有無でカードの大きさが変わらないようにする */
+.summary-card h2 {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.4;
+  min-height: 2.8em;
+}
+
+.summary-btn {
+  min-height: 52px;
+  font-size: 17px;
+}
+
+/* どちらも 0: ボタンなしでカード全体を薄くする */
+.summary-card.empty {
+  opacity: 0.55;
+}
+
+.summary-card.empty h2 {
+  min-height: 0;
 }
 
 /* ホームのフォルダ一覧: フォルダアイコン付きの角丸カード（7-2） */
@@ -347,6 +368,18 @@ label.field {
 label.field > span:first-child {
   font-size: 14px;
   color: var(--muted);
+}
+
+/* 単語フォームの取込への導線（7-4）: メモ欄の下の薄い文字のリンク */
+.link-muted {
+  align-self: flex-start;
+  justify-content: flex-start;
+  min-width: 0;
+  padding: 0;
+  font-size: 14px;
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 input[type='text'],
@@ -506,13 +539,6 @@ textarea {
   font-weight: 600;
   min-height: 36px;
   padding: 0 8px;
-}
-
-/* action sheet */
-.sheet-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
 }
 
 /* import preview (10-3) */
