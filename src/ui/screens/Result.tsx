@@ -47,7 +47,7 @@ export function Result() {
   };
 
   return (
-    <div className="screen">
+    <div className="screen has-fixed-bottom result-screen">
       <header className="header">
         <div className="header-side" />
         <h1>結果</h1>
@@ -64,6 +64,7 @@ export function Result() {
         </div>
       )}
 
+      {/* 内訳は上から Again / Hard / Good / Easy の順（7-7）。GRADES は 1〜4 の昇順 */}
       <div className="result-bars" aria-label="評価内訳">
         {GRADES.map((g) => (
           <div key={g} className="result-bar">
@@ -108,12 +109,13 @@ export function Result() {
         </button>
       )}
 
-      <div className="btn-row">
-        <button type="button" className="btn-secondary" onClick={goHome}>
-          ホームへ
-        </button>
-        <button type="button" className="btn-primary" onClick={again}>
+      {/* 画面下部に固定（7-7）。上から「もう一度」（枠線のみ）、「ホームへ」（強調色）。内容はこの上でスクロールする */}
+      <div className="fixed-bottom result-actions">
+        <button type="button" className="btn-outline" onClick={again} data-testid="again">
           もう一度
+        </button>
+        <button type="button" className="btn-primary" onClick={goHome} data-testid="go-home">
+          ホームへ
         </button>
       </div>
     </div>

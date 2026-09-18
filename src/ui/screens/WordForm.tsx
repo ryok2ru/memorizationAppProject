@@ -4,21 +4,22 @@ import { Header } from '../components/Header';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ImportScreen } from './Import';
 import { errorMessage } from '../hooks';
-import { createWord, deleteWord, getWord, updateWordText } from '../../db/repo';
+import { createWord, deleteWord, getWord, listFolders, updateWordText } from '../../db/repo';
 import { updateBadge } from '../../app/badge';
 import { importResultMessage, importText, type ImportOptions, type ImportSettings } from '../../app/csv';
 import { loadSettings, requestPersistentStorage, updateSettings } from '../../app/settings';
 import { isWordValid, trimWord, validateWord } from '../../domain/validation';
-import { LIMITS } from '../../domain/types';
+import { LIMITS, type Folder } from '../../domain/types';
 
 export function WordForm() {
   const { folderId, wordId } = useParams();
   const navigate = useNavigate();
   const isEdit = wordId != null;
-  const [initial, setInitial] = useState({ englishTerm: '', japaneseDefinition: '', memo: '' });
+  // folderId は所属フォルダ（7-4）。新規は URL のフォルダ、編集は単語の現在のフォルダが初期値
+  const [initial, setInitial] = useState({ folderId: folderId ?? '', englishTerm: '', japaneseDefinition: '', memo: '' });
   const [form, setForm] = useState(initial);
-  const [targetFolder, setTargetFolder] = useState(folderId ?? '');
-  const [loaded, setLoaded] = useState(!isEdit);
+  const [folders, setFolders] = useState<Folder[]>([]);
+  const [loaded, setLoaded] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -27,37 +28,51 @@ export function WordForm() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (!isEdit) return;
-    void getWord(wordId).then((w) => {
-      if (!w) {
+    let alive = true;
+    void Promise.all([listFolders(), isEdit ? getWord(wordId) : Promise.resolve(undefined)]).then(([list, w]) => {
+      if (!alive) return;
+      if (isEdit && !w) {
         navigate('/', { replace: true });
         return;
       }
-      const v = { englishTerm: w.englishTerm, japaneseDefinition: w.japaneseDefinition, memo: w.memo };
-      setInitial(v);
-      setForm(v);
-      setTargetFolder(w.folderId);
+      setFolders(list);
+      if (w) {
+        const v = { folderId: w.folderId, englishTerm: w.englishTerm, japaneseDefinition: w.japaneseDefinition, memo: w.memo };
+        setInitial(v);
+        setForm(v);
+      }
       setLoaded(true);
     });
+    return () => {
+      alive = false;
+    };
   }, [isEdit, wordId, navigate]);
 
   const errors = validateWord(form);
   const canSave = isWordValid(form);
-  const dirty = form.englishTerm !== initial.englishTerm || form.japaneseDefinition !== initial.japaneseDefinition || form.memo !== initial.memo;
-  const backTo = `/folders/${targetFolder}`;
+  const dirty =
+    form.folderId !== initial.folderId ||
+    form.englishTerm !== initial.englishTerm ||
+    form.japaneseDefinition !== initial.japaneseDefinition ||
+    form.memo !== initial.memo;
+  /** キャンセル・削除の戻り先: 元のフォルダ */
+  const backTo = `/folders/${initial.folderId}`;
+  /** 保存・取込の後の戻り先: 選んだフォルダ（移動した場合は移動先） */
+  const savedTo = `/folders/${form.folderId}`;
 
   const onSave = async () => {
     if (!canSave) return;
     const value = trimWord(form);
     try {
       if (isEdit) {
-        await updateWordText(wordId, value);
+        // folderId も一緒に更新する。FSRS の状態と ReviewLog は変えない
+        await updateWordText(wordId, { ...value, folderId: form.folderId });
       } else {
         requestPersistentStorage();
-        await createWord({ folderId: targetFolder, ...value });
+        await createWord({ folderId: form.folderId, ...value });
         await updateBadge();
       }
-      navigate(backTo, { replace: true });
+      navigate(savedTo, { replace: true });
     } catch (e) {
       setMessage(errorMessage(e));
     }
@@ -99,14 +114,14 @@ export function WordForm() {
     let result: string;
     try {
       await updateSettings({ importDelimiter: options.delimiter, importHasHeader: options.hasHeader, importColumns: options.columns });
-      const plan = await importText(importFile.text, targetFolder, options);
+      const plan = await importText(importFile.text, form.folderId, options);
       result = importResultMessage(plan);
       await updateBadge();
     } catch (e) {
       result = errorMessage(e);
     }
-    // 単語一覧に戻って結果を表示する
-    navigate(backTo, { replace: true, state: { message: result } });
+    // 選んだフォルダの単語一覧に戻って結果を表示する
+    navigate(savedTo, { replace: true, state: { message: result } });
   };
 
   if (importFile) {
@@ -159,6 +174,16 @@ export function WordForm() {
         }}
         style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
       >
+        <label className="field">
+          <span>フォルダ</span>
+          <select value={form.folderId} disabled={!loaded} onChange={(e) => setForm({ ...form, folderId: e.target.value })} data-testid="folder-select">
+            {folders.map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.name}
+              </option>
+            ))}
+          </select>
+        </label>
         <label className="field">
           <span>英単語（必須）</span>
           <input

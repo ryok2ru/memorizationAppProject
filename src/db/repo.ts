@@ -114,12 +114,19 @@ export async function bulkAddWords(words: Word[]): Promise<void> {
   });
 }
 
+/** 単語フォームの保存。本文と、指定があれば所属フォルダ（7-4）を更新する。FSRS 項目は変えない */
 export async function updateWordText(
   id: string,
-  input: { englishTerm: string; japaneseDefinition: string; memo: string },
+  input: { englishTerm: string; japaneseDefinition: string; memo: string; folderId?: string },
   now = Date.now(),
 ): Promise<void> {
   await db.words.update(id, { ...input, updatedAt: now });
+}
+
+/** 複数の単語を別のフォルダへ移動（7-3）。folderId と updatedAt だけを 1 トランザクションで更新し、FSRS 項目と ReviewLog は変えない */
+export async function moveWords(ids: string[], folderId: string, now = Date.now()): Promise<number> {
+  if (ids.length === 0) return 0;
+  return db.transaction('rw', db.words, async () => db.words.where('id').anyOf(ids).modify({ folderId, updatedAt: now }));
 }
 
 /** 単語と ReviewLog を削除 */

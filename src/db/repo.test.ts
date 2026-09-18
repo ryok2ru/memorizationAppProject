@@ -16,12 +16,14 @@ import {
   listNewWords,
   listReviewLogsForWord,
   listReviewTimes,
+  moveWords,
   readSnapshot,
   replaceAll,
   resetProgress,
   revertRating,
   saveRating,
   saveSettings,
+  updateWordText,
 } from './repo';
 import { rate } from '../domain/fsrs';
 import { addDays } from '../domain/dates';
@@ -145,6 +147,69 @@ describe('words and queries', () => {
     expect(fixed.state).toBe(0);
     expect(fixed.due).toBe(now);
     expect(fixed.last_review).toBeNull();
+  });
+});
+
+describe('moving words between folders', () => {
+  it('moveWords changes only folderId and updatedAt, keeping FSRS fields and review logs', async () => {
+    const f = await createFolder('A', now);
+    const g = await createFolder('B', now);
+    const a = await createWord({ folderId: f.id, englishTerm: 'a', japaneseDefinition: 'あ', memo: '' }, now);
+    const b = await createWord({ folderId: f.id, englishTerm: 'b', japaneseDefinition: 'い', memo: '' }, now);
+    const c = await createWord({ folderId: f.id, englishTerm: 'c', japaneseDefinition: 'う', memo: '' }, now);
+    const ra = rate(a, 3, now);
+    await saveRating(ra.word, ra.log);
+    const before = await getWord(a.id);
+
+    const later = now + 1000;
+    expect(await moveWords([a.id, c.id], g.id, later)).toBe(2);
+
+    const movedA = await getWord(a.id);
+    expect(movedA?.folderId).toBe(g.id);
+    expect(movedA?.updatedAt).toBe(later);
+    // FSRS 項目と本文はそのまま
+    expect(movedA?.state).toBe(before?.state);
+    expect(movedA?.due).toBe(before?.due);
+    expect(movedA?.reps).toBe(before?.reps);
+    expect(movedA?.stability).toBe(before?.stability);
+    expect(movedA?.last_review).toBe(before?.last_review);
+    expect(movedA?.englishTerm).toBe('a');
+    expect(movedA?.createdAt).toBe(now);
+    expect((await listReviewLogsForWord(a.id)).map((l) => l.id)).toEqual([ra.log.id]);
+
+    expect((await getWord(c.id))?.folderId).toBe(g.id);
+    // 選んでいない単語は動かない
+    expect((await getWord(b.id))?.folderId).toBe(f.id);
+    expect((await getWord(b.id))?.updatedAt).toBe(now);
+    // フォルダ別のクエリが移動先を見る
+    expect((await listNewWords(g.id, now)).map((w) => w.englishTerm)).toEqual(['c']);
+    expect((await listDueWords(g.id, now)).map((w) => w.id)).toEqual([a.id]);
+    expect((await listDueWords(f.id, now)).length).toBe(0);
+    expect(await countNewWords(f.id)).toBe(1);
+
+    expect(await moveWords([], f.id, later)).toBe(0);
+  });
+
+  it('updateWordText can change the folder together with the text', async () => {
+    const f = await createFolder('A', now);
+    const g = await createFolder('B', now);
+    const w = await createWord({ folderId: f.id, englishTerm: 'a', japaneseDefinition: 'あ', memo: '' }, now);
+    const r = rate(w, 3, now);
+    await saveRating(r.word, r.log);
+
+    await updateWordText(w.id, { englishTerm: 'a2', japaneseDefinition: 'あ2', memo: 'm' }, now + 1);
+    let stored = await getWord(w.id);
+    expect(stored?.folderId).toBe(f.id);
+    expect(stored?.englishTerm).toBe('a2');
+
+    await updateWordText(w.id, { englishTerm: 'a3', japaneseDefinition: 'あ3', memo: '', folderId: g.id }, now + 2);
+    stored = await getWord(w.id);
+    expect(stored?.folderId).toBe(g.id);
+    expect(stored?.englishTerm).toBe('a3');
+    expect(stored?.updatedAt).toBe(now + 2);
+    expect(stored?.state).toBe(r.word.state);
+    expect(stored?.due).toBe(r.word.due);
+    expect((await listReviewLogsForWord(w.id)).length).toBe(1);
   });
 });
 

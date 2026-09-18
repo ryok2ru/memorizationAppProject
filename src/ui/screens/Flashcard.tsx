@@ -11,8 +11,10 @@ const DECIDE_PX = 10;
 const CONFIRM_PX = 120;
 /** 横スワイプの最大の傾き（度） */
 const MAX_TILT_DEG = 8;
-/** 背景と評価名の最大の不透明度 */
-const MAX_OPACITY = 0.9;
+/** 評価色（カードの背景）の最大の不透明度 */
+const MAX_OPACITY = 0.85;
+/** 進み具合がこれを超えたら文字色を白にする */
+const WHITE_TEXT_AT = 0.4;
 /** カードが抜けるアニメーションの長さ（ms）。CSS の .study-card.leave と合わせる */
 const LEAVE_MS = 250;
 /** 元の位置に戻るアニメーションの長さ（ms）。CSS の .study-card.settle と合わせる */
@@ -30,6 +32,15 @@ type Anim = 'none' | 'settle' | 'leave';
 export function swipeGrade(axis: Axis, d: number): Grade {
   if (axis === 'x') return d > 0 ? 3 : 2;
   return d > 0 ? 1 : 4;
+}
+
+/**
+ * スワイプ中の見た目（6-4）。progress は移動量 ÷ 120px を 0〜1 に丸めたもの。
+ * 評価色は文字の下に敷き、不透明度は 0 から 0.85 まで。0.4 を超えたら文字を白にして色の上でも読めるようにする
+ */
+export function swipeVisual(progress: number): { fillOpacity: number; whiteText: boolean } {
+  const p = Math.min(1, Math.max(0, progress));
+  return { fillOpacity: MAX_OPACITY * p, whiteText: p > WHITE_TEXT_AT };
 }
 
 export function Flashcard() {
@@ -132,9 +143,10 @@ export function Flashcard() {
 
   if (!session) return null;
 
-  // スワイプ中の見た目: 追従、0〜120px で色と評価名を濃く、横は最大 8 度傾ける
+  // スワイプ中の見た目: 追従、0〜120px で文字の下の評価色を濃く（文字は薄くしない）、横は最大 8 度傾ける
   const dragGrade = drag ? swipeGrade(drag.axis, drag.d) : null;
   const progress = drag ? (anim === 'leave' ? 1 : Math.min(1, Math.abs(drag.d) / CONFIRM_PX)) : 0;
+  const visual = swipeVisual(progress);
   let transform: string | undefined;
   if (drag) {
     const sign = drag.d > 0 ? 1 : -1;
@@ -146,7 +158,7 @@ export function Flashcard() {
       transform = drag.axis === 'x' ? `translate(${drag.d}px, 0) rotate(${tilt}deg)` : `translate(0, ${drag.d}px)`;
     }
   }
-  const cardClass = `study-card${anim === 'leave' ? ' leave' : anim === 'settle' ? ' settle' : ''}`;
+  const cardClass = `study-card${anim === 'leave' ? ' leave' : anim === 'settle' ? ' settle' : ''}${dragGrade && visual.whiteText ? ' on-color' : ''}`;
 
   return (
     <div className="screen study-screen">
@@ -180,47 +192,50 @@ export function Flashcard() {
       )}
 
       {word && (
-        <div
-          ref={cardRef}
-          className={cardClass}
-          role="button"
-          tabIndex={0}
-          aria-label={flipped ? '裏面' : '表面。タップで答えを表示。スワイプで評価'}
-          data-testid="study-card"
-          data-flipped={flipped}
-          data-swipe-grade={dragGrade ?? undefined}
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={onPointerCancel}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') setFlipped(true);
-          }}
-          onDragStart={(e) => e.preventDefault()}
-          style={transform ? { transform } : undefined}
-        >
-          {flipped ? (
-            <>
-              <div className="study-term small">{word.englishTerm}</div>
-              <div className="study-def">{word.japaneseDefinition}</div>
-              {word.memo && <div className="study-memo">{word.memo}</div>}
-            </>
-          ) : (
-            <>
+        <div className="card-stage">
+          <div
+            ref={cardRef}
+            className={cardClass}
+            role="button"
+            tabIndex={0}
+            aria-label={flipped ? '裏面' : '表面。タップで答えを表示。スワイプで評価'}
+            data-testid="study-card"
+            data-flipped={flipped}
+            data-swipe-grade={dragGrade ?? undefined}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerCancel={onPointerCancel}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') setFlipped(true);
+            }}
+            onDragStart={(e) => e.preventDefault()}
+            style={transform ? { transform } : undefined}
+          >
+            {/* 評価色はカードの背景として文字の下に敷く（z-index: -1）。評価名はカードに重ねず、下の 1 行に出す */}
+            {dragGrade && <div className={`swipe-fill grade-${dragGrade}`} style={{ opacity: visual.fillOpacity }} aria-hidden="true" />}
+            {flipped ? (
+              <>
+                <div className="study-term small">{word.englishTerm}</div>
+                <div className="study-def">{word.japaneseDefinition}</div>
+                {word.memo && <div className="study-memo">{word.memo}</div>}
+              </>
+            ) : (
               <div className="study-term">{word.englishTerm}</div>
-              <div className="study-hint" data-testid="front-hint">
-                タップで答えを表示。スワイプで評価
-              </div>
-            </>
-          )}
-          {dragGrade && (
-            <>
-              <div className={`swipe-fill grade-${dragGrade}`} style={{ opacity: MAX_OPACITY * progress }} aria-hidden="true" />
-              <div className="swipe-grade" style={{ opacity: MAX_OPACITY * progress }} data-testid="swipe-label" aria-hidden="true">
+            )}
+          </div>
+          {/* カード直下の高さ固定の 1 行: 表面は案内文、裏面は空。スワイプ中は評価名を評価色で出し、指を離したら戻す */}
+          <div className="card-status" data-testid="card-status">
+            {dragGrade ? (
+              <span className={`swipe-grade text-grade-${dragGrade}`} data-testid="swipe-label">
                 {GRADE_NAMES[dragGrade]}
-              </div>
-            </>
-          )}
+              </span>
+            ) : flipped ? null : (
+              <span className="study-hint" data-testid="front-hint">
+                タップで答えを表示。スワイプで評価
+              </span>
+            )}
+          </div>
         </div>
       )}
 

@@ -41,6 +41,11 @@ body {
   padding-bottom: 96px;
 }
 
+/* 結果画面: 下部に固定した 2 段のボタン（7-7）の分だけ余白を増やし、内容がその上でスクロールできるようにする */
+.screen.result-screen {
+  padding-bottom: 144px;
+}
+
 /* header */
 .header {
   display: flex;
@@ -124,6 +129,16 @@ button:disabled,
   width: 100%;
 }
 
+/* 枠線のみのボタン（結果画面の「もう一度」） */
+.btn-outline {
+  background: none;
+  border: 1.5px solid var(--accent);
+  color: var(--accent);
+  padding: 0 20px;
+  font-weight: 600;
+  width: 100%;
+}
+
 .btn-icon {
   font-size: 22px;
   color: var(--accent);
@@ -167,6 +182,17 @@ button:disabled,
 .fixed-bottom > * {
   max-width: 448px;
   margin: 0 auto;
+}
+
+/* 結果画面の下部固定ボタン: 縦並び、横幅いっぱい、高さ 48px 以上。一番下が「ホームへ」、その上が「もう一度」 */
+.result-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.result-actions > button {
+  min-height: 48px;
 }
 
 /* cards & lists */
@@ -605,6 +631,21 @@ dialog .btn-row {
   margin-top: 16px;
 }
 
+/* ダイアログ内の選択肢の一覧（移動先フォルダ）。多いときは一覧だけスクロールする */
+.dialog-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.dialog-list .btn-secondary {
+  justify-content: flex-start;
+  text-align: left;
+  flex: none;
+}
+
 /* state bar */
 .statebar {
   display: flex;
@@ -662,6 +703,15 @@ dialog .btn-row {
   overscroll-behavior: none;
 }
 
+/* カードと、その直下の高さ固定の 1 行（案内文 / 評価名）をまとめる */
+.card-stage {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
 .study-card {
   flex: 1;
   min-height: 260px;
@@ -695,30 +745,55 @@ dialog .btn-row {
   transition: transform 0.25s ease-in;
 }
 
+/* カード直下の 1 行分の領域（高さ固定）。表面は案内文、裏面は空。スワイプ中は評価名を評価色で出す */
+.card-status {
+  height: 24px;
+  line-height: 24px;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  flex: none;
+}
+
 .study-hint {
   font-size: 14px;
   color: var(--muted);
 }
 
-/* スワイプ中: カード全体を評価の色で覆い（不透明度 0〜0.9）、中央に評価名を白で出す */
+.swipe-grade {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.text-grade-1 {
+  color: var(--again);
+}
+.text-grade-2 {
+  color: var(--hard);
+}
+.text-grade-3 {
+  color: var(--good);
+}
+.text-grade-4 {
+  color: var(--easy);
+}
+
+/* スワイプ中: 評価の色をカードの背景として文字の下に敷く（不透明度 0〜0.85）。文字は薄くしない */
 .swipe-fill {
   position: absolute;
   inset: 0;
   border-radius: inherit;
   pointer-events: none;
+  z-index: -1;
 }
 
-.swipe-grade {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 44px;
-  font-weight: 800;
-  letter-spacing: 0.02em;
+/* 進み具合が 0.4 を超えたら文字を白にして、色の上でも読めるようにする */
+.study-card.on-color .study-term,
+.study-card.on-color .study-term.small,
+.study-card.on-color .study-def,
+.study-card.on-color .study-memo {
   color: #fff;
-  pointer-events: none;
 }
 
 .grade-area {
