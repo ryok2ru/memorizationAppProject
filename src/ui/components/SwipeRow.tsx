@@ -1,7 +1,7 @@
 import { useRef, useState, type PointerEvent, type ReactNode } from 'react';
 
 interface Props {
-  /** 行幅の 40% 以上スワイプして離したときに呼ぶ */
+  /** 行幅の 20% 以上スワイプして離したときに呼ぶ */
   onDelete: () => void;
   disabled?: boolean;
   children: ReactNode;
@@ -9,8 +9,8 @@ interface Props {
 
 /** 横か縦かを決めるまでの移動量 */
 const DECIDE_PX = 10;
-/** 削除が確定する移動量（行幅に対する割合） */
-export const DELETE_RATIO = 0.4;
+/** 削除が確定する移動量（行幅に対する割合）。未満で離したら元に戻す */
+export const DELETE_RATIO = 0.2;
 
 type Mode = 'undecided' | 'swipe' | 'scroll';
 

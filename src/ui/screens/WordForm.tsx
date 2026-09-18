@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Header } from '../components/Header';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { ImportScreen } from './Import';
 import { errorMessage } from '../hooks';
 import { createWord, deleteWord, getWord, updateWordText } from '../../db/repo';
 import { updateBadge } from '../../app/badge';
-import { requestPersistentStorage } from '../../app/settings';
+import { importResultMessage, importText, type ImportOptions, type ImportSettings } from '../../app/csv';
+import { loadSettings, requestPersistentStorage, updateSettings } from '../../app/settings';
 import { isWordValid, trimWord, validateWord } from '../../domain/validation';
 import { LIMITS } from '../../domain/types';
 
@@ -20,6 +22,9 @@ export function WordForm() {
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [importFile, setImportFile] = useState<{ name: string; text: string; saved: ImportSettings } | null>(null);
+  const [importing, setImporting] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!isEdit) return;
@@ -74,6 +79,48 @@ export function WordForm() {
     if (dirty) setConfirmDiscard(true);
     else navigate(backTo);
   };
+
+  // ---------- CSV / TSV 取込（10-3）。新規のときだけ、メモ欄の下のリンクから ----------
+
+  const onPickFile = async (file: File | undefined) => {
+    if (fileRef.current) fileRef.current.value = '';
+    if (!file) return;
+    try {
+      const [text, saved] = await Promise.all([file.text(), loadSettings()]);
+      setImportFile({ name: file.name, text, saved });
+    } catch (e) {
+      setMessage(errorMessage(e));
+    }
+  };
+
+  const onImport = async (options: ImportOptions) => {
+    if (!importFile) return;
+    setImporting(true);
+    let result: string;
+    try {
+      await updateSettings({ importDelimiter: options.delimiter, importHasHeader: options.hasHeader, importColumns: options.columns });
+      const plan = await importText(importFile.text, targetFolder, options);
+      result = importResultMessage(plan);
+      await updateBadge();
+    } catch (e) {
+      result = errorMessage(e);
+    }
+    // 単語一覧に戻って結果を表示する
+    navigate(backTo, { replace: true, state: { message: result } });
+  };
+
+  if (importFile) {
+    return (
+      <ImportScreen
+        fileName={importFile.name}
+        text={importFile.text}
+        saved={importFile.saved}
+        busy={importing}
+        onImport={(o) => void onImport(o)}
+        onCancel={() => setImportFile(null)}
+      />
+    );
+  }
 
   const showError = (key: keyof typeof errors) => {
     const msg = errors[key];
@@ -146,6 +193,22 @@ export function WordForm() {
             {form.memo.length} / {LIMITS.memo}
           </span>
         </label>
+        {!isEdit && (
+          <>
+            <button type="button" className="link-muted" onClick={() => fileRef.current?.click()} data-testid="import-link">
+              複数の単語をまとめて登録する（CSV / TSV 取込）
+            </button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values,text/plain"
+              style={{ display: 'none' }}
+              aria-label="CSV/TSV ファイル"
+              data-testid="import-file"
+              onChange={(e) => void onPickFile(e.target.files?.[0])}
+            />
+          </>
+        )}
         <button type="submit" className="btn-primary" disabled={!canSave || !loaded}>
           保存
         </button>

@@ -1,16 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Header } from '../components/Header';
 import { StateBar } from '../components/StateBar';
 import { EmptyState } from '../components/EmptyState';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { ActionSheet } from '../components/ActionSheet';
 import { SwipeRow } from '../components/SwipeRow';
-import { ImportScreen } from './Import';
 import { useAsync, errorMessage } from '../hooks';
 import { deleteWord, deleteWords, getFolder, listWordsInFolder } from '../../db/repo';
-import { importResultMessage, importText, type ImportOptions } from '../../app/csv';
-import { loadSettings, updateSettings } from '../../app/settings';
 import { updateBadge } from '../../app/badge';
 import { endOfDay, relativeDueLabel } from '../../domain/dates';
 import { LIMITS, STATE_ICONS, STATE_NAMES, type CardState, type Word } from '../../domain/types';
@@ -25,29 +21,32 @@ export const UNDO_MS = 5000;
 export function WordList() {
   const { folderId = '' } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { data, reload } = useAsync(async () => {
-    const [folder, words, settings] = await Promise.all([getFolder(folderId), listWordsInFolder(folderId), loadSettings()]);
-    return { folder, words, settings };
+    const [folder, words] = await Promise.all([getFolder(folderId), listWordsInFolder(folderId)]);
+    return { folder, words };
   }, [folderId]);
   const [query, setQuery] = useState('');
   const [debounced, setDebounced] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
-  const [message, setMessage] = useState<string | null>(null);
-  const [addMenuOpen, setAddMenuOpen] = useState(false);
-  const [importFile, setImportFile] = useState<{ name: string; text: string } | null>(null);
-  const [importing, setImporting] = useState(false);
+  // 取込の結果（10-3）は単語フォームから location.state で受け取り、この画面で表示する
+  const [message, setMessage] = useState<string | null>(() => (location.state as { message?: string } | null)?.message ?? null);
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [confirmBulk, setConfirmBulk] = useState(false);
   const [pending, setPending] = useState<Word | null>(null);
   const pendingRef = useRef<{ word: Word; timer: ReturnType<typeof setTimeout> } | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
   const now = Date.now();
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(query), 300);
     return () => clearTimeout(t);
   }, [query]);
+
+  // 受け取った結果を履歴から消し、再読み込みや戻る操作でもう一度出ないようにする
+  useEffect(() => {
+    if (location.state != null) navigate(location.pathname, { replace: true, state: null });
+  }, [location.state, location.pathname, navigate]);
 
   const words = data?.words ?? [];
   const byState = useMemo(() => {
@@ -141,48 +140,6 @@ export function WordList() {
     }
   };
 
-  // ---------- 取込 ----------
-
-  const onPickFile = async (file: File | undefined) => {
-    if (fileRef.current) fileRef.current.value = '';
-    if (!file) return;
-    try {
-      setImportFile({ name: file.name, text: await file.text() });
-    } catch (e) {
-      setMessage(errorMessage(e));
-    }
-  };
-
-  const onImport = async (options: ImportOptions) => {
-    if (!importFile) return;
-    setImporting(true);
-    try {
-      await updateSettings({ importDelimiter: options.delimiter, importHasHeader: options.hasHeader, importColumns: options.columns });
-      const plan = await importText(importFile.text, folderId, options);
-      setMessage(importResultMessage(plan));
-      await updateBadge();
-    } catch (e) {
-      setMessage(errorMessage(e));
-    } finally {
-      setImporting(false);
-      setImportFile(null);
-      reload();
-    }
-  };
-
-  if (importFile && data) {
-    return (
-      <ImportScreen
-        fileName={importFile.name}
-        text={importFile.text}
-        saved={data.settings}
-        busy={importing}
-        onImport={(o) => void onImport(o)}
-        onCancel={() => setImportFile(null)}
-      />
-    );
-  }
-
   const startLabel = dueCount > 0 ? `学習開始（${dueCount}語）` : newCount > 0 ? `新しい単語を学習（${newCount}語）` : '学習できる単語がありません';
 
   const rowText = (w: Word) => (
@@ -212,7 +169,7 @@ export function WordList() {
             </button>
           ) : (
             <>
-              <button type="button" className="btn-icon" aria-label="追加メニュー" aria-haspopup="dialog" onClick={() => setAddMenuOpen(true)}>
+              <button type="button" className="btn-icon" aria-label="単語を追加" onClick={() => navigate(`/folders/${folderId}/words/new`)}>
                 ＋
               </button>
               <button type="button" className="btn-text" disabled={words.length === 0} onClick={() => setSelecting(true)}>
@@ -221,38 +178,6 @@ export function WordList() {
             </>
           )
         }
-      />
-
-      <ActionSheet open={addMenuOpen} label="追加メニュー" onClose={() => setAddMenuOpen(false)}>
-        <button
-          type="button"
-          className="btn-secondary"
-          onClick={() => {
-            setAddMenuOpen(false);
-            navigate(`/folders/${folderId}/words/new`);
-          }}
-        >
-          単語を追加
-        </button>
-        <button
-          type="button"
-          className="btn-secondary"
-          onClick={() => {
-            setAddMenuOpen(false);
-            fileRef.current?.click();
-          }}
-        >
-          CSV/TSV を取り込む
-        </button>
-      </ActionSheet>
-      <input
-        ref={fileRef}
-        type="file"
-        accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values,text/plain"
-        style={{ display: 'none' }}
-        aria-label="CSV/TSV ファイル"
-        data-testid="import-file"
-        onChange={(e) => void onPickFile(e.target.files?.[0])}
       />
 
       {message && (
