@@ -5,6 +5,7 @@ import { StateBar } from '../components/StateBar';
 import { EmptyState } from '../components/EmptyState';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { SwipeRow } from '../components/SwipeRow';
+import { syncModal } from '../components/modal';
 import { useAsync, errorMessage } from '../hooks';
 import { deleteWord, deleteWords, getFolder, listFolders, listWordsInFolder, moveWords } from '../../db/repo';
 import { updateBadge } from '../../app/badge';
@@ -17,8 +18,20 @@ const FILTER_LABELS: Record<Filter, string> = { all: 'すべて', due: '要復�
 
 /** スワイプ削除の「元に戻す」を表示する時間 */
 export const UNDO_MS = 5000;
-/** 「N件を移動しました」を表示する時間 */
-export const MOVED_MS = 3000;
+/** 移動後のトースト「N件を「フォルダ名」に移動しました」を表示する時間 */
+export const MOVED_MS = 4000;
+
+/** 移動後のトーストの文面（7-3、7-4）。単語フォームからの移動でも同じ文面を使う */
+export const movedMessage = (n: number, folderName: string): string => `${n}件を「${folderName}」に移動しました`;
+
+/** 移動先の候補: 現在のフォルダを除く。一覧と「移動先が無い」の判定の両方にこの結果を使う */
+export const moveTargets = (folders: Folder[], currentId: string): Folder[] => folders.filter((f) => f.id !== currentId);
+
+/** 単語一覧へ遷移するときに location.state で渡すもの。message は通知欄（取込の結果）、toast は画面下に 4 秒出す文面 */
+interface ListState {
+  message?: string;
+  toast?: string;
+}
 
 export function WordList() {
   const { folderId = '' } = useParams();
@@ -32,7 +45,9 @@ export function WordList() {
   const [debounced, setDebounced] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
   // 取込の結果（10-3）は単語フォームから location.state で受け取り、この画面で表示する
-  const [message, setMessage] = useState<string | null>(() => (location.state as { message?: string } | null)?.message ?? null);
+  const [message, setMessage] = useState<string | null>(() => (location.state as ListState | null)?.message ?? null);
+  // 画面下のトースト（移動の結果）。4 秒で消す
+  const [toast, setToast] = useState<string | null>(null);
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [confirmBulk, setConfirmBulk] = useState(false);
@@ -46,14 +61,22 @@ export function WordList() {
     return () => clearTimeout(t);
   }, [query]);
 
-  // 受け取った結果を履歴から消し、再読み込みや戻る操作でもう一度出ないようにする
+  /** 画面下に text を 4 秒出す。消すときにそのままなら消し、別の文面に変わっていたら消さない */
+  const showToast = useCallback((text: string) => {
+    setToast(text);
+    setTimeout(() => setToast((t) => (t === text ? null : t)), MOVED_MS);
+  }, []);
+
+  // 受け取った結果を履歴から消し、再読み込みや戻る操作でもう一度出ないようにする。単語フォームからの移動のトーストもここで出す
   useEffect(() => {
-    if (location.state != null) navigate(location.pathname, { replace: true, state: null });
-  }, [location.state, location.pathname, navigate]);
+    const s = location.state as ListState | null;
+    if (s == null) return;
+    navigate(location.pathname, { replace: true, state: null });
+    if (s.toast) showToast(s.toast);
+  }, [location.state, location.pathname, navigate, showToast]);
 
   const words = data?.words ?? [];
-  /** 移動先の候補: 現在のフォルダを除く */
-  const otherFolders = useMemo(() => (data?.folders ?? []).filter((f) => f.id !== folderId), [data, folderId]);
+  const otherFolders = useMemo(() => moveTargets(data?.folders ?? [], folderId), [data, folderId]);
   const byState = useMemo(() => {
     const c: Record<CardState, number> = { 0: 0, 1: 0, 2: 0, 3: 0 };
     for (const w of words) c[w.state] += 1;
@@ -153,9 +176,7 @@ export function WordList() {
       const n = await moveWords(ids, dest.id);
       exitSelect();
       reload();
-      const text = `${n}件を移動しました`;
-      setMessage(text);
-      setTimeout(() => setMessage((m) => (m === text ? null : m)), MOVED_MS);
+      showToast(movedMessage(n, dest.name));
     } catch (e) {
       setMessage(errorMessage(e));
     }
@@ -254,14 +275,19 @@ export function WordList() {
         </ul>
       )}
 
-      {pending && (
+      {/* 画面下のトースト。削除の「元に戻す」を優先し、同じ位置に重ねない */}
+      {pending ? (
         <div className="toast" role="status" data-testid="undo-toast">
           <span>削除しました</span>
           <button type="button" onClick={undoDelete}>
             元に戻す
           </button>
         </div>
-      )}
+      ) : toast ? (
+        <div className="toast" role="status" data-testid="moved-toast">
+          <span>{toast}</span>
+        </div>
+      ) : null}
 
       <div className="fixed-bottom">
         {selecting ? (
@@ -300,7 +326,10 @@ export function WordList() {
   );
 }
 
-/** 移動先フォルダを選ぶダイアログ。folders は現在のフォルダを除いた一覧 */
+/**
+ * 移動先フォルダを選ぶダイアログ。folders は現在のフォルダを除いた一覧（moveTargets）で、
+ * 一覧が空なら「移動先のフォルダがありません」。見た目は他の確認ダイアログと同じ（枠線なし、行は枠線のないボタン）
+ */
 function MoveDialog({
   open,
   folders,
@@ -315,15 +344,11 @@ function MoveDialog({
   onCancel: () => void;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    if (open && !el.open) el.showModal();
-    else if (!open && el.open) el.close();
-  }, [open]);
+  useEffect(() => syncModal(ref.current, open), [open]);
   return (
     <dialog
       ref={ref}
+      tabIndex={-1}
       onCancel={(e) => {
         e.preventDefault();
         onCancel();

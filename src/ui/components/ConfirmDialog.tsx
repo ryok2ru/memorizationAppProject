@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { syncModal } from './modal';
 
 interface Props {
   open: boolean;
@@ -23,14 +24,9 @@ export function ConfirmDialog({
   onCancel,
 }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    if (open && !el.open) el.showModal();
-    else if (!open && el.open) el.close();
-  }, [open]);
+  useEffect(() => syncModal(ref.current, open), [open]);
   return (
-    <dialog ref={ref} onCancel={(e) => { e.preventDefault(); onCancel(); }} aria-labelledby="confirm-title">
+    <dialog ref={ref} tabIndex={-1} onCancel={(e) => { e.preventDefault(); onCancel(); }} aria-labelledby="confirm-title">
       {title && <h2 id="confirm-title">{title}</h2>}
       <p>{message}</p>
       <div className="btn-row">

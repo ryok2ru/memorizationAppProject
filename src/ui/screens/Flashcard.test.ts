@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { swipeGrade, swipeVisual } from './Flashcard';
+import { SWIPE_GUIDES, labelSide, swipeGrade, swipeVisual } from './Flashcard';
 
 describe('swipeGrade', () => {
   it('maps down = Again, left = Hard, right = Good, up = Easy', () => {
@@ -24,5 +24,25 @@ describe('swipeVisual', () => {
     expect(swipeVisual(0.39).whiteText).toBe(false);
     expect(swipeVisual(0.4).whiteText).toBe(false);
     expect(swipeVisual(0.41).whiteText).toBe(true);
+  });
+});
+
+describe('labelSide', () => {
+  it('shows Again above the card and the other grades below it', () => {
+    expect(labelSide(1)).toBe('top');
+    expect(labelSide(2)).toBe('bottom');
+    expect(labelSide(3)).toBe('bottom');
+    expect(labelSide(4)).toBe('bottom');
+  });
+});
+
+describe('SWIPE_GUIDES', () => {
+  it('names each side with its grade: up Easy, down Again, left Hard, right Good', () => {
+    const bySide = Object.fromEntries(SWIPE_GUIDES.map((g) => [g.side, g]));
+    expect(bySide.top).toMatchObject({ grade: 4, text: '↑ Easy' });
+    expect(bySide.bottom).toMatchObject({ grade: 1, text: '↓ Again' });
+    expect(bySide.left).toMatchObject({ grade: 2, text: '← Hard' });
+    expect(bySide.right).toMatchObject({ grade: 3, text: '→ Good' });
+    expect(SWIPE_GUIDES).toHaveLength(4);
   });
 });

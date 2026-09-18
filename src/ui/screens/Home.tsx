@@ -6,6 +6,7 @@ import { StateBar } from '../components/StateBar';
 import { EmptyState } from '../components/EmptyState';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { InputDialog } from '../components/InputDialog';
+import { syncModal } from '../components/modal';
 import { useAsync, isStandalone, errorMessage } from '../hooks';
 import { createFolder, deleteFolder, listAllWords, listFolders, renameFolder } from '../../db/repo';
 import { loadOverview, loadFolderStats, type FolderStats } from '../../app/stats';
@@ -300,11 +301,8 @@ function FolderMenu({
   return (
     <dialog
       open={false}
-      ref={(el) => {
-        if (!el) return;
-        if (open && !el.open) el.showModal();
-        else if (!open && el.open) el.close();
-      }}
+      tabIndex={-1}
+      ref={(el) => syncModal(el, open)}
       onCancel={(e) => {
         e.preventDefault();
         onClose();
