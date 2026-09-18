@@ -2,6 +2,52 @@
 
 設計書 `docx/VocaVault_PWA_v1.0.md` を正として実装した際の、差異・判断・未確認事項の記録。新しい変更ほど上に書く。
 
+## 3 回目の変更（スワイプ評価の変更、評価の取り消し）
+
+設計書の 6-3、6-4、7-6、12-1 を実装に合わせて書き換えた。加えて 14 章の項目 4 が「表面では反応しない」のままだと新しい 6-4 と矛盾するので、表面・裏面の両方で動くことと取り消しの確認項目（4-2）に書き換えた。示されていないほかの節は変えていない。
+
+### 設計書との差異・残した不整合
+
+- **`UndoEntry` に `prevDue`（評価前の `lastDue[wordId]`）を足した**。`lastDue` は初期実装で追加した結果画面用の項目（設計書 6-3 の `SessionState` には無い）で、これも評価前に戻さないと「次回最も早い復習日」が取り消した評価を含んでしまうため。設計書 6-3 の `UndoEntry` には `lastDue` 自体が無いので書いていない。
+- **`shownCount` は取り消しで戻さない**。表示に使っていない項目で、戻った単語を再表示するときに `markShown()` がまた +1 する。
+
+### 自分で判断した点
+
+**スワイプ評価（`src/ui/screens/Flashcard.tsx`）**
+
+- **軸の決定と追従**: `pointerdown` で `setPointerCapture` し、10px 動いた時点で `|dx| >= |dy|` なら横、そうでなければ縦に決める。以後はその軸の移動量だけを使い、カードの追従もその軸方向だけにした（横に決めた後に指が上下しても、カードは横にしか動かない）。「指に追従」を 2 軸で動かすと、判定に使わない方向にもカードが動いて評価が読みにくくなるため。
+- **タップの判定**: 10px 未満のまま離したらタップ（軸が決まっていない = タップ）。以前の 8px から 10px に揃えた。`click` ハンドラでの反転は削除し、`pointerup` とキーボード（Enter / Space）だけで反転する。マウスでドラッグして戻したときに `click` が発火して裏返ってしまうのを避けるため。
+- **色の重ね方**: カードの `background` そのものは変えず、カード全体を覆う `.swipe-fill`（評価色、`border-radius: inherit`）と、その上に `.swipe-grade`（評価名、白、44px）を絶対配置で重ねた。どちらも不透明度 = 0.9 × min(1, 移動量 ÷ 120)。内容（英単語や日本語訳）は覆いの下に残るので、120px で 1 割だけ透けて見える。評価名と本文が同じ中央に重なるが、覆いが濃くなるにつれ本文が消えるので実用上は読める。
+- **傾き**: 横スワイプのみ `rotate(8deg × clamp(移動量 ÷ 120, -1, 1))`。縦は傾けない。
+- **確定後の動き**: 120px 以上で離したら `.leave` クラス（`transition: transform 0.25s`）で画面外（横: `innerWidth + 200px`、縦: `innerHeight + 200px`）へ動かし、250ms 後に `rate()` を呼ぶ。評価を先に呼ぶと、抜けていく途中のカードの中身が次の単語に変わってしまうため。抜けている間は評価ボタン・↶・カードの `pointerdown` を無効にする。次のカードは `word` が一度 null になってからマウントされるので、抜けた位置から戻ってくる見た目にはならない。
+- **120px 未満で離したとき**: `.settle` クラス（`transition: transform 0.2s`）で元の位置へ。戻っている途中でも `pointerdown` は受け付ける（その時点でアニメーションを打ち切って指に付く）。
+- **`touchmove` の抑止**: カード要素に `addEventListener('touchmove', …, { passive: false })` を付け、ジェスチャー中（`pointerdown` 〜 `pointerup` / `pointercancel`）だけ `preventDefault()` する。React の `onTouchMove` は passive になるので使えない。カードは単語が切り替わるたびにマウントし直されるため、リスナーは `word.id` を依存にした `useEffect` で付け直す。
+- **`overscroll-behavior: none`** は指示どおり学習画面（`.screen.study-screen`、フラッシュカードとタイプ入力の両方）に付けた。iOS のラバーバンドは最上位のスクロール要素（html / body）で起きるので、実機でまだ端が引っ張れる場合は `html, body` 側にも付けるのが次の手。
+- **評価ボタンの場所**: 表面では `.grade-area` を `visibility: hidden` にして場所だけ確保する（`aria-hidden` も付ける）。表裏でカードの大きさが変わらないようにするため。ボタン自体も表面では `disabled`。
+- **左上の評価表記（`.swipe-label`）とその CSS は削除**した。
+- **PC のマウス**でも同じコードで動く（Playwright の確認はマウスと CDP のタッチイベントの両方で行った）。
+
+**評価の取り消し（`src/app/session.ts`、`src/db/repo.ts`、`src/ui/useStudy.ts`）**
+
+- **`applyRating()` の引数を変更**: `(state, wordId, grade, updated, now)` → `(state, before: Word, grade, updated: Word, logId, now)`。評価前の FSRS 項目と ReviewLog の id を `UndoEntry` に控えるため。`before` から FSRS 項目だけを `FSRS_KEYS` で抜き出して保存する（`Word` 全体は持たない）。
+- **取り消しの順序**: `undoAndSave()` は先に DB（`repo.revertRating()`: `words.update(wordId, before)` と `reviewLogs.delete(logId)` を 1 トランザクション）を戻し、成功したときだけ `undoLast()` でセッション状態を戻す。失敗したらセッション状態は変えず「取り消しに失敗しました」を表示する（`rateAndSave()` と同じく 1 回再試行、容量超過は専用メッセージ）。
+- **`updatedAt` は戻さない**。評価時に付いた `updatedAt` が残るが、表示にも判定にも使っていない。
+- **`finishedAt` は取り消しで消す**。最後の 1 枚の評価直後は結果画面へ遷移するので学習画面から取り消せる状況は無いが、状態として矛盾しないようにした。
+- **保存失敗でスキップした評価**（`skipCurrent()`）は `UndoEntry` を積まない（DB に何も書いていないため）。その後に取り消すと、スタックの末尾（スキップより前の評価）の位置まで戻るので、スキップした単語ももう一度出る。
+- **フラッシュカードを裏面で戻す方法**: `useStudy` が `restoredKey`（戻った出題位置 `index:wordId`）を **ref** に持ち、`setSession()` の前に書く。`Flashcard` は出題位置（`cardKey`）が変わる `useEffect` の中で `isRestored(cardKey)` を見て `flipped` の初期値を決める。最初は React の state で持ったが、`setSession()`（`useSyncExternalStore` の外部ストア更新 = SyncLane）と `setState`（DefaultLane）が別の描画になり、出題位置が変わった描画で state がまだ古く、表面で出てしまった。ref なら同じ描画で参照できる。
+- **タイプ入力**は出題位置が変わると入力欄と判定結果を消す既存の `useEffect` がそのまま働くので、追加の処理は無い。
+- **↶ ボタン**は共通ヘッダー（`Header`）を使っていない学習画面のヘッダー左側に直接置いた（`aria-label="直前の評価を取り消す"`）。取り消せるものが無いとき、保存中、カードが抜けている間は非活性。確認ダイアログは出さない。
+- **結果画面から取り消す機能は無い**（指示どおり学習画面だけ）。
+
+### 確認できなかった点
+
+- iPhone 実機でのスワイプの手触り: `touch-action: none` と `setPointerCapture`、非 passive の `touchmove` 抑止、`overscroll-behavior: none` の効き方（特にラバーバンド）。Chromium では CDP のタッチイベント（`Input.dispatchTouchEvent`）とマウスの両方で 4 方向の評価・軸ロック・戻りを確認したが、iOS Safari の挙動は別。
+- 抜けるアニメーション（250ms）と次のカードの出方の実機での見え方。
+
+### ヘッドレスブラウザで確認した内容
+
+`npm run preview` に対して Playwright（Chromium、iPhone 13 相当 390×844 のタッチ端末エミュレーション）で 49 項目を確認した: 表面の案内文「タップで答えを表示。スワイプで評価」、開始直後の ↶ 非活性、表面での `.grade-area` の `visibility: hidden` とボタン非活性、カードの `touch-action: none`、学習画面の `overscroll-behavior: none`、静止時に評価名が無いこと → 表面で右 60px: 「Good」、覆いと評価名の不透明度 0.45、`translate(60px) rotate(4deg)`、離すと戻って評価されない（ReviewLog 0 件、表面のまま） → 表面で右 130px: 不透明度 0.9、傾き 8 度、離すと `.leave` で画面外へ、Good で保存（state = Learning、ReviewLog 1 件）、次のカードは表面、↶ が活性 → ↶: 同じ単語が裏面（評価ボタン有効）で戻る、ReviewLog 0 件、単語が New（reps 0）に戻る、進捗が「残り 3枚 / 完了 0枚」、↶ が非活性 → 裏面で下 130px: 「Again」、傾き無し、再出題で残りが減らない → 横 12px で軸を決めた後に縦 200px 動かしても横（Hard、`translate(-188px)`）のまま → 4px の移動はタップとして裏返る、裏面で `.grade-area` が visible → CDP のタッチで上 140px: 「Easy」で保存 → ↶ を繰り返して開始時点（残り 3 / 完了 0、ReviewLog 0 件、↶ 非活性、最初の単語）に戻る → ボタンで最後まで評価して結果画面（Easy 3 件） → 進捗リセット後に英→日タイプ入力: ↶ 非活性、不正解 → 次へ（Again）→ ↶ で同じ出題に戻り入力欄が空・判定表示なし・入力可能、進捗が戻る → 320px 幅で横スクロールなし。ページエラーなし。
+
 ## 2 回目の変更（評価ボタン表記、取込画面、複数選択・スワイプ削除、横断検索ほか）
 
 設計書の 4-5、5-2、5-3、5-4、6-4、7-2、7-3、10-3、12-1 を実装に合わせて書き換えた。示されていない節は変えていない。

@@ -6,7 +6,9 @@ import { checkEn, checkJa, splitCandidates } from '../../domain/normalize';
 import { GRADE_NAMES } from '../../domain/types';
 
 export function Typing() {
-  const { session, word, message, busy, rate, quit, remaining, completed } = useStudy((m) => m === 'enToJa' || m === 'jaToEn');
+  const { session, word, message, busy, rate, undo, canUndo, quit, remaining, completed } = useStudy(
+    (m) => m === 'enToJa' || m === 'jaToEn',
+  );
   const [input, setInput] = useState('');
   const [judged, setJudged] = useState<'ok' | 'ng' | null>(null);
   const [confirmQuit, setConfirmQuit] = useState(false);
@@ -40,9 +42,20 @@ export function Typing() {
   const answer = word ? (enToJa ? splitCandidates(word.japaneseDefinition).join('、') : word.englishTerm) : '';
 
   return (
-    <div className="screen">
+    <div className="screen study-screen">
       <header className="header">
-        <div className="header-side" />
+        <div className="header-side">
+          <button
+            type="button"
+            className="btn-icon"
+            aria-label="直前の評価を取り消す"
+            disabled={!canUndo || busy}
+            onClick={() => void undo()}
+            data-testid="undo"
+          >
+            ↶
+          </button>
+        </div>
         <h1>{enToJa ? '英→日 入力' : '日→英 入力'}</h1>
         <div className="header-side right">
           <button type="button" className="btn-icon" aria-label="セッションを終了" onClick={() => setConfirmQuit(true)}>

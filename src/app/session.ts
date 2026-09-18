@@ -1,6 +1,6 @@
-import type { Grade, Word, ReviewLog } from '../domain/types';
-import { rate as fsrsRate, isFinitePayload, isShortTermState } from '../domain/fsrs';
-import { saveRating } from '../db/repo';
+import type { Grade, Word, ReviewLog, FsrsFields } from '../domain/types';
+import { rate as fsrsRate, isFinitePayload, isShortTermState, FSRS_KEYS } from '../domain/fsrs';
+import { saveRating, revertRating } from '../db/repo';
 import type { SessionKind } from './queue';
 
 export type StudyMode = 'flashcard' | 'enToJa' | 'jaToEn';
@@ -16,6 +16,23 @@ export interface SessionItem {
   shownCount: number;
 }
 
+/** 評価 1 件を取り消すための記録（6-3）。末尾が直前の評価 */
+export interface UndoEntry {
+  wordId: string;
+  /** 評価前の FSRS 項目 */
+  before: FsrsFields;
+  /** その評価で追加した ReviewLog の id */
+  logId: string;
+  /** その評価でキュー末尾に再出題を追加したか */
+  requeued: boolean;
+  /** その評価で firstRating を設定したか */
+  setFirstRating: boolean;
+  /** 評価前の index */
+  index: number;
+  /** 評価前の lastDue[wordId]（未評価なら undefined） */
+  prevDue?: number;
+}
+
 export interface SessionState {
   context: SessionContext;
   mode: StudyMode;
@@ -27,10 +44,12 @@ export interface SessionState {
   endedEarly: boolean;
   /** 評価した単語の更新後 due（結果画面用） */
   lastDue: Record<string, number>;
+  /** 取り消しスタック。ページ再読み込みで消える */
+  undo: UndoEntry[];
 }
 
 export function createSession(context: SessionContext, mode: StudyMode, queue: string[], now = Date.now()): SessionState {
-  return { context, mode, queue: queue.slice(), index: 0, items: {}, startedAt: now, endedEarly: false, lastDue: {} };
+  return { context, mode, queue: queue.slice(), index: 0, items: {}, startedAt: now, endedEarly: false, lastDue: {}, undo: [] };
 }
 
 export const currentWordId = (s: SessionState): string | undefined => s.queue[s.index];
@@ -39,26 +58,80 @@ export const remaining = (s: SessionState): number => Math.max(0, s.queue.length
 /** 完了 = 評価済みの単語数（再出題は数えない） */
 export const completed = (s: SessionState): number =>
   Object.values(s.items).filter((i) => i.firstRating != null).length;
+export const canUndo = (s: SessionState): boolean => s.undo.length > 0;
 
 export function markShown(s: SessionState, wordId: string): SessionState {
   const item = s.items[wordId] ?? { shownCount: 0 };
   return { ...s, items: { ...s.items, [wordId]: { ...item, shownCount: item.shownCount + 1 } } };
 }
 
+const pickFsrs = (w: Word): FsrsFields => Object.fromEntries(FSRS_KEYS.map((k) => [k, w[k]])) as unknown as FsrsFields;
+
 /**
- * 評価結果（保存済み）をセッション状態に反映する。6-3 の手順 3〜5。
+ * 評価結果（保存済み）をセッション状態に反映する。6-3 の手順 3〜6。
+ * @param before 評価前の Word（取り消し用に FSRS 項目を控える）
+ * @param updated 評価後の Word
+ * @param logId その評価で保存した ReviewLog の id
  */
-export function applyRating(s: SessionState, wordId: string, grade: Grade, updated: Word, now = Date.now()): SessionState {
+export function applyRating(
+  s: SessionState,
+  before: Word,
+  grade: Grade,
+  updated: Word,
+  logId: string,
+  now = Date.now(),
+): SessionState {
+  const wordId = before.id;
   const item = s.items[wordId] ?? { shownCount: 0 };
+  const setFirstRating = item.firstRating == null;
   const items = {
     ...s.items,
     [wordId]: { ...item, firstRating: item.firstRating ?? grade },
   };
-  const queue = isShortTermState(updated.state) ? [...s.queue, wordId] : s.queue;
+  const requeued = isShortTermState(updated.state);
+  const queue = requeued ? [...s.queue, wordId] : s.queue;
   const index = s.index + 1;
-  const next: SessionState = { ...s, items, queue, index, lastDue: { ...s.lastDue, [wordId]: updated.due } };
+  const entry: UndoEntry = {
+    wordId,
+    before: pickFsrs(before),
+    logId,
+    requeued,
+    setFirstRating,
+    index: s.index,
+    prevDue: s.lastDue[wordId],
+  };
+  const next: SessionState = {
+    ...s,
+    items,
+    queue,
+    index,
+    lastDue: { ...s.lastDue, [wordId]: updated.due },
+    undo: [...s.undo, entry],
+  };
   if (index >= queue.length) next.finishedAt = now;
   return next;
+}
+
+/**
+ * 直前の評価をセッション状態から取り消す（6-3）。DB は戻さない（undoAndSave が行う）。
+ * スタックが空ならそのまま返す。
+ */
+export function undoLast(s: SessionState): SessionState {
+  const entry = s.undo[s.undo.length - 1];
+  if (!entry) return s;
+  let queue = s.queue;
+  if (entry.requeued && queue[queue.length - 1] === entry.wordId) queue = queue.slice(0, -1);
+  const items = { ...s.items };
+  const item = items[entry.wordId];
+  if (item && entry.setFirstRating) {
+    const { firstRating: _omit, ...rest } = item;
+    items[entry.wordId] = rest;
+  }
+  const lastDue = { ...s.lastDue };
+  if (entry.prevDue == null) delete lastDue[entry.wordId];
+  else lastDue[entry.wordId] = entry.prevDue;
+  const { finishedAt: _finished, ...rest } = s;
+  return { ...rest, queue, items, lastDue, index: entry.index, undo: s.undo.slice(0, -1) };
 }
 
 /** 保存失敗時など、評価を記録せず次に進む */
@@ -117,6 +190,30 @@ export async function rateAndSave(word: Word, grade: Grade, now = Date.now()): P
     } catch (e) {
       if (isQuotaError(e)) return { ok: false, reason: 'quota' };
       console.error('failed to save rating', e);
+    }
+  }
+  return { ok: false, reason: 'save' };
+}
+
+export type UndoOutcome =
+  | { ok: true; state: SessionState; wordId: string }
+  | { ok: false; reason: 'empty' | 'save' | 'quota' };
+
+/**
+ * 直前の評価を取り消す（6-3）。単語の FSRS 項目を評価前に戻し、その評価の ReviewLog を削除する
+ * DB 書き込み（1 トランザクション）が成功したときだけ、セッション状態を評価前に戻す。
+ * 書き込み失敗は 1 回再試行する。
+ */
+export async function undoAndSave(s: SessionState): Promise<UndoOutcome> {
+  const entry = s.undo[s.undo.length - 1];
+  if (!entry) return { ok: false, reason: 'empty' };
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      await revertRating(entry.wordId, entry.before, entry.logId);
+      return { ok: true, state: undoLast(s), wordId: entry.wordId };
+    } catch (e) {
+      if (isQuotaError(e)) return { ok: false, reason: 'quota' };
+      console.error('failed to undo rating', e);
     }
   }
   return { ok: false, reason: 'save' };

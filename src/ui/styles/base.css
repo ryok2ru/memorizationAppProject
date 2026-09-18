@@ -631,6 +631,11 @@ dialog .btn-row {
 }
 
 /* study */
+/* 学習画面: 端でのラバーバンドやスクロール連鎖を止める（6-4） */
+.study-screen {
+  overscroll-behavior: none;
+}
+
 .study-card {
   flex: 1;
   min-height: 260px;
@@ -645,11 +650,60 @@ dialog .btn-row {
   position: relative;
   user-select: none;
   -webkit-user-select: none;
+  -webkit-touch-callout: none;
   touch-action: none;
   width: 100%;
   cursor: pointer;
   color: inherit;
   gap: 8px;
+  will-change: transform;
+}
+
+/* 120px 未満で離したとき: 元の位置に戻る */
+.study-card.settle {
+  transition: transform 0.2s ease;
+}
+
+/* 確定: その方向に抜ける */
+.study-card.leave {
+  transition: transform 0.25s ease-in;
+}
+
+.study-hint {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+/* スワイプ中: カード全体を評価の色で覆い（不透明度 0〜0.9）、中央に評価名を白で出す */
+.swipe-fill {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.swipe-grade {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 44px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #fff;
+  pointer-events: none;
+}
+
+.grade-area {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* 表面では評価ボタンを表示しない（場所は確保する） */
+.grade-area.hidden {
+  visibility: hidden;
 }
 
 .study-term {
@@ -674,16 +728,6 @@ dialog .btn-row {
   color: var(--muted);
   white-space: pre-wrap;
   font-size: 15px;
-}
-
-.swipe-label {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  padding: 4px 12px;
-  border-radius: 8px;
-  color: #fff;
-  font-weight: 700;
 }
 
 .grade-buttons {

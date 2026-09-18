@@ -1,6 +1,6 @@
 import Dexie from 'dexie';
 import { db } from './db';
-import type { Folder, Word, ReviewLog, Settings, CardState } from '../domain/types';
+import type { Folder, Word, ReviewLog, Settings, CardState, FsrsFields } from '../domain/types';
 import { DEFAULT_SETTINGS } from '../domain/types';
 import { newCardFields, FSRS_KEYS } from '../domain/fsrs';
 import { endOfDay } from '../domain/dates';
@@ -141,6 +141,17 @@ export async function saveRating(word: Word, log: ReviewLog): Promise<void> {
   await db.transaction('rw', db.words, db.reviewLogs, async () => {
     await db.words.put(word);
     await db.reviewLogs.add(log);
+  });
+}
+
+/**
+ * 評価の取り消し（6-3）。Word の FSRS 項目を評価前の値に戻し、その評価で追加した ReviewLog を削除する。
+ * 1 トランザクションで行う。単語がすでに無ければ FSRS 項目の書き戻しは何もしない。
+ */
+export async function revertRating(wordId: string, before: FsrsFields, logId: string): Promise<void> {
+  await db.transaction('rw', db.words, db.reviewLogs, async () => {
+    await db.words.update(wordId, { ...before });
+    await db.reviewLogs.delete(logId);
   });
 }
 
