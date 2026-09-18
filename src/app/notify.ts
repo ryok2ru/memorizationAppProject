@@ -1,5 +1,6 @@
 import type { Settings, Word } from '../domain/types';
 import { addDays, formatNotifyAt, parseHHMM, startOfDay } from '../domain/dates';
+import { getSettings, listAllWords, saveSettings } from '../db/repo';
 
 export interface NotifyItem {
   at: string; // "YYYY-MM-DD HH:MM"（ローカル時刻）
@@ -47,4 +48,15 @@ export function buildShortcutUrl(payload: NotifyPayload): string {
 export function needsRefresh(lastScheduledAt: number | null, now: number): boolean {
   if (lastScheduledAt == null) return false;
   return now - lastScheduledAt >= 2 * 24 * 60 * 60 * 1000;
+}
+
+/**
+ * 「今日の学習を終える」: 全単語から予約 JSON を作り、最終予約を保存してから
+ * Shortcut の URL を返す。UI は戻り値を window.location.href に入れる。
+ */
+export async function finishToday(now = Date.now()): Promise<{ url: string; itemCount: number }> {
+  const [words, settings] = await Promise.all([listAllWords(), getSettings()]);
+  const payload = buildNotifyPayload(words, settings, now);
+  await saveSettings({ lastNotifyScheduledAt: now, lastNotifyItemCount: payload.items.length });
+  return { url: buildShortcutUrl(payload), itemCount: payload.items.length };
 }

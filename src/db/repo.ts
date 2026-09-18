@@ -254,3 +254,8 @@ export async function clearAll(): Promise<void> {
     await Promise.all([db.folders.clear(), db.words.clear(), db.reviewLogs.clear(), db.settings.clear()]);
   });
 }
+
+/** review が [from, to) にある ReviewLog の件数 */
+export async function countReviewsBetween(from: number, to: number): Promise<number> {
+  return db.reviewLogs.where('review').between(from, to, true, false).count();
+}

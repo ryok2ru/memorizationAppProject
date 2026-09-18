@@ -1,5 +1,5 @@
-import { dateKey, addDays } from '../domain/dates';
-import { listReviewTimes } from '../db/repo';
+import { dateKey, addDays, startOfDay } from '../domain/dates';
+import { countReviewsBetween, listReviewTimes } from '../db/repo';
 
 export interface Streak {
   current: number;
@@ -32,4 +32,9 @@ export function streakMessage(s: Streak): string {
 
 export async function loadStreak(now = Date.now()): Promise<Streak> {
   return computeStreak(await listReviewTimes(), now);
+}
+
+/** startedAt より前に今日の学習記録があったか（結果画面の「当日初の学習」判定） */
+export async function hadStudiedTodayBefore(startedAt: number): Promise<boolean> {
+  return (await countReviewsBetween(startOfDay(startedAt), startedAt)) > 0;
 }
