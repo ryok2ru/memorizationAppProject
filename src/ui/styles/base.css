@@ -130,6 +130,14 @@ button:disabled,
   padding: 0 8px;
 }
 
+.btn-danger-solid {
+  background: var(--danger);
+  color: #fff;
+  padding: 0 20px;
+  font-weight: 600;
+  width: 100%;
+}
+
 .btn-text {
   color: var(--accent);
   padding: 0 8px;
@@ -186,37 +194,91 @@ button:disabled,
   color: var(--muted);
 }
 
-.list {
+/* ホームのフォルダ一覧: フォルダアイコン付きの角丸カード（7-2） */
+.folder-list {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
-.row {
+.folder-card {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 8px 8px 8px 16px;
-  min-height: 56px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  padding: 8px 8px 8px 12px;
+  min-height: 64px;
 }
 
-.row-main {
+.folder-main {
   flex: 1;
   min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
   text-align: left;
   color: inherit;
-  display: flex;
-  padding: 4px 0;
-  min-height: 44px;
   border-radius: 0;
-  justify-content: flex-start;
+  padding: 4px 0;
+}
+
+.folder-icon {
+  font-size: 26px;
+  line-height: 1;
+}
+
+/* 単語一覧: 区切り線のあるリスト行（7-3） */
+.word-list {
+  list-style: none;
+  margin: 0 -16px;
+  padding: 0;
+  display: flex;
   flex-direction: column;
-  align-items: stretch;
+  border-top: 1px solid var(--border);
+}
+
+.word-row {
+  border-bottom: 1px solid var(--border);
+}
+
+.word-row-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-height: 56px;
+  padding: 8px 16px;
+  color: inherit;
+  text-align: left;
+  border-radius: 0;
+  background: var(--bg);
+}
+
+.select-row {
+  cursor: pointer;
+}
+
+.select-row input[type='checkbox'] {
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  flex: none;
+  accent-color: var(--accent);
+}
+
+.row-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .row-title {
@@ -377,6 +439,119 @@ textarea {
   font-weight: 600;
 }
 
+/* swipe to delete (7-3) */
+.swipe-row {
+  position: relative;
+  overflow: hidden;
+  touch-action: pan-y;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.swipe-row a {
+  -webkit-user-drag: none;
+}
+
+.swipe-under {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--again);
+  color: #fff;
+}
+
+.swipe-trash {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.swipe-content {
+  position: relative;
+  background: var(--bg);
+  will-change: transform;
+}
+
+.swipe-content.animating {
+  transition: transform 0.2s ease;
+}
+
+/* undo toast */
+.toast {
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  bottom: calc(84px + env(safe-area-inset-bottom));
+  max-width: 448px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--fg);
+  color: var(--bg);
+  border-radius: var(--radius);
+  padding: 6px 16px;
+  font-size: 14px;
+  z-index: 6;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.toast button {
+  color: var(--easy);
+  font-weight: 600;
+  min-height: 36px;
+  padding: 0 8px;
+}
+
+/* action sheet */
+.sheet-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* import preview (10-3) */
+.table-wrap {
+  overflow-x: auto;
+  margin: 0 -16px;
+  padding: 0 16px;
+}
+
+.preview-table {
+  border-collapse: collapse;
+  font-size: 13px;
+  min-width: 100%;
+}
+
+.preview-table th,
+.preview-table td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.preview-table th select {
+  width: auto;
+  min-width: 96px;
+  min-height: 36px;
+  padding: 4px 8px;
+  font-size: 13px;
+}
+
+.preview-table tr.header-row td {
+  font-weight: 600;
+  color: var(--muted);
+}
+
 /* dialogs */
 dialog {
   border: none;
@@ -531,6 +706,13 @@ dialog .btn-row {
   font-weight: 400;
   font-size: 12px;
   opacity: 0.9;
+}
+
+.requeue-hint {
+  margin: -8px 0 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--muted);
 }
 
 .grade-1 {
