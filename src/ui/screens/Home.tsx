@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Header } from '../components/Header';
 import { SummaryCard } from '../components/SummaryCard';
@@ -6,6 +6,7 @@ import { StateBar } from '../components/StateBar';
 import { EmptyState } from '../components/EmptyState';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { InputDialog } from '../components/InputDialog';
+import { InfoSheet } from '../components/InfoSheet';
 import { syncModal } from '../components/modal';
 import { useAsync, isStandalone, errorMessage } from '../hooks';
 import { createFolder, deleteFolder, listAllWords, listFolders, renameFolder } from '../../db/repo';
@@ -45,6 +46,7 @@ export function Home() {
   const [renaming, setRenaming] = useState<Folder | null>(null);
   const [deleting, setDeleting] = useState<Folder | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [info, setInfo] = useState(false);
   const [standalone] = useState(() => isStandalone());
   const [query, setQuery] = useState('');
   const [debounced, setDebounced] = useState('');
@@ -130,7 +132,16 @@ export function Home() {
             <button type="button" className="btn-icon" aria-label="フォルダを追加" onClick={() => setAdding(true)}>
               ＋
             </button>
-            <Link to="/settings" className="btn btn-icon" aria-label="設定">
+            <button
+              type="button"
+              className="btn-icon btn-icon-lg"
+              aria-label="状態と評価の説明"
+              onClick={() => setInfo(true)}
+              data-testid="open-info"
+            >
+              ⓘ
+            </button>
+            <Link to="/settings" className="btn btn-icon btn-icon-lg" aria-label="設定">
               ⚙︎
             </Link>
           </>
@@ -214,8 +225,10 @@ export function Home() {
                         </span>
                       </span>
                     </Link>
-                    <button type="button" className="btn-icon" aria-label={`${f.name} のメニュー`} onClick={() => setMenuFolder(f)}>
-                      …
+                    <button type="button" className="btn-icon btn-menu" aria-label={`${f.name} のメニュー`} onClick={() => setMenuFolder(f)}>
+                      <span aria-hidden="true" />
+                      <span aria-hidden="true" />
+                      <span aria-hidden="true" />
                     </button>
                   </li>
                 );
@@ -273,6 +286,8 @@ export function Home() {
         }}
       />
 
+      <InfoSheet open={info} onClose={() => setInfo(false)} />
+
       <ConfirmDialog
         open={deleting != null}
         title="フォルダを削除"
@@ -297,27 +312,31 @@ function FolderMenu({
   onRename: () => void;
   onDelete: () => void;
 }) {
+  const ref = useRef<HTMLDialogElement>(null);
   const open = folder != null;
+  useEffect(() => syncModal(ref.current, open), [open]);
   return (
     <dialog
-      open={false}
+      ref={ref}
       tabIndex={-1}
-      ref={(el) => syncModal(el, open)}
       onCancel={(e) => {
         e.preventDefault();
         onClose();
       }}
       aria-label="フォルダのメニュー"
+      data-testid="folder-menu"
     >
       <h2>{folder?.name}</h2>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <button type="button" className="btn-secondary" onClick={onRename}>
+      <div className="menu-list">
+        <button type="button" className="menu-item" onClick={onRename}>
           名前を変更
         </button>
-        <button type="button" className="btn-danger" onClick={onDelete}>
+        <button type="button" className="menu-item danger" onClick={onDelete}>
           削除
         </button>
-        <button type="button" className="btn-secondary" onClick={onClose}>
+      </div>
+      <div className="btn-row">
+        <button type="button" className="btn-secondary menu-cancel" onClick={onClose}>
           キャンセル
         </button>
       </div>
