@@ -16,6 +16,54 @@ type Filter = 'all' | 'due' | 'mastered';
 
 const FILTER_LABELS: Record<Filter, string> = { all: 'すべて', due: '要復習', mastered: '習得済み' };
 
+/** 並べ替えの種類（7-3）。選択は保存せず、一覧を開くたびに DEFAULT_SORT に戻す */
+export type SortKey = 'createdDesc' | 'createdAsc' | 'alpha' | 'state' | 'due';
+
+export const SORT_KEYS: SortKey[] = ['createdDesc', 'createdAsc', 'alpha', 'state', 'due'];
+
+export const DEFAULT_SORT: SortKey = 'createdDesc';
+
+/** シートに出す名前 */
+export const SORT_LABELS: Record<SortKey, string> = {
+  createdDesc: '登録日（新しい順）',
+  createdAsc: '登録日（古い順）',
+  alpha: 'アルファベット順（A→Z）',
+  state: '学習状態',
+  due: '次回の復習日',
+};
+
+/** ボタンに出す短い名前 */
+export const SORT_SHORT_LABELS: Record<SortKey, string> = {
+  createdDesc: '新しい順',
+  createdAsc: '古い順',
+  alpha: 'A→Z',
+  state: '学習状態',
+  due: '復習日',
+};
+
+/** 学習状態の並び: New → Learning → Relearning → Review */
+const STATE_RANK: Record<CardState, number> = { 0: 0, 1: 1, 2: 3, 3: 2 };
+
+/** フィルターと検索の結果に対して並べ替える（7-3）。入力の配列は変えない */
+export function sortWords(words: Word[], key: SortKey): Word[] {
+  const list = words.slice();
+  switch (key) {
+    case 'createdAsc':
+      return list.sort((a, b) => a.createdAt - b.createdAt);
+    case 'alpha':
+      return list.sort((a, b) => a.englishTerm.localeCompare(b.englishTerm));
+    case 'state':
+      // 同じ状態の中は due 昇順
+      return list.sort((a, b) => STATE_RANK[a.state] - STATE_RANK[b.state] || a.due - b.due);
+    case 'due':
+      // 未学習（state = 0）は最後に回し、それ以外は due の近い順
+      return list.sort((a, b) => Number(a.state === 0) - Number(b.state === 0) || (a.state === 0 ? 0 : a.due - b.due));
+    case 'createdDesc':
+    default:
+      return list.sort((a, b) => b.createdAt - a.createdAt);
+  }
+}
+
 /** スワイプ削除の「元に戻す」を表示する時間 */
 export const UNDO_MS = 5000;
 /** 移動後のトースト「N件を「フォルダ名」に移動しました」を表示する時間 */
@@ -44,6 +92,8 @@ export function WordList() {
   const [query, setQuery] = useState('');
   const [debounced, setDebounced] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
+  const [sort, setSort] = useState<SortKey>(DEFAULT_SORT);
+  const [sorting, setSorting] = useState(false);
   // 取込の結果（10-3）は単語フォームから location.state で受け取り、この画面で表示する
   const [message, setMessage] = useState<string | null>(() => (location.state as ListState | null)?.message ?? null);
   // 画面下のトースト（移動の結果）。4 秒で消す
@@ -60,6 +110,9 @@ export function WordList() {
     const t = setTimeout(() => setDebounced(query), 300);
     return () => clearTimeout(t);
   }, [query]);
+
+  // 並べ替えは保存しない。一覧を開くたびに既定（登録日の新しい順）に戻す（7-3）
+  useEffect(() => setSort(DEFAULT_SORT), [folderId]);
 
   /** 画面下に text を 4 秒出す。消すときにそのままなら消し、別の文面に変わっていたら消さない */
   const showToast = useCallback((text: string) => {
@@ -85,18 +138,18 @@ export function WordList() {
   const dueCount = useMemo(() => words.filter((w) => w.state !== 0 && w.due <= endOfDay(now)).length, [words, now]);
   const newCount = byState[0];
 
+  // フィルター → 検索 → 並べ替え の順に適用する（7-3）。フィルター別の既定ソートは持たない
   const shown = useMemo(() => {
     const end = endOfDay(now);
     let list: Word[];
-    if (filter === 'due') list = words.filter((w) => w.state !== 0 && w.due <= end).sort((a, b) => a.due - b.due);
-    else if (filter === 'mastered')
-      list = words.filter((w) => w.state === 2 && w.stability >= LIMITS.masteredStability).sort((a, b) => b.createdAt - a.createdAt);
-    else list = words.slice().sort((a, b) => a.due - b.due);
+    if (filter === 'due') list = words.filter((w) => w.state !== 0 && w.due <= end);
+    else if (filter === 'mastered') list = words.filter((w) => w.state === 2 && w.stability >= LIMITS.masteredStability);
+    else list = words;
     const q = debounced.trim().toLowerCase();
     if (q) list = list.filter((w) => w.englishTerm.toLowerCase().includes(q) || w.japaneseDefinition.toLowerCase().includes(q));
     if (pending) list = list.filter((w) => w.id !== pending.id); // 削除保留中の行は隠す
-    return list;
-  }, [words, filter, debounced, now, pending]);
+    return sortWords(list, sort);
+  }, [words, filter, debounced, now, pending, sort]);
 
   const filtering = filter !== 'all' || debounced.trim() !== '';
 
@@ -236,12 +289,23 @@ export function WordList() {
         onChange={(e) => setQuery(e.target.value)}
       />
 
-      <div className="segmented" role="group" aria-label="フィルター">
-        {(['all', 'due', 'mastered'] as Filter[]).map((f) => (
-          <button key={f} type="button" aria-pressed={filter === f} onClick={() => setFilter(f)}>
-            {FILTER_LABELS[f]}
-          </button>
-        ))}
+      <div className="list-controls">
+        <div className="segmented" role="group" aria-label="フィルター">
+          {(['all', 'due', 'mastered'] as Filter[]).map((f) => (
+            <button key={f} type="button" aria-pressed={filter === f} onClick={() => setFilter(f)}>
+              {FILTER_LABELS[f]}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          className="sort-btn"
+          aria-label={`並べ替え: ${SORT_LABELS[sort]}`}
+          onClick={() => setSorting(true)}
+          data-testid="sort-button"
+        >
+          <span aria-hidden="true">⇅</span> {SORT_SHORT_LABELS[sort]}
+        </button>
       </div>
 
       {filtering && (
@@ -321,6 +385,16 @@ export function WordList() {
         onCancel={() => setConfirmBulk(false)}
       />
 
+      <SortSheet
+        open={sorting}
+        value={sort}
+        onPick={(k) => {
+          setSort(k);
+          setSorting(false);
+        }}
+        onCancel={() => setSorting(false)}
+      />
+
       <MoveDialog open={moving} folders={otherFolders} count={selected.size} onPick={(f) => void bulkMove(f)} onCancel={() => setMoving(false)} />
     </div>
   );
@@ -368,6 +442,52 @@ function MoveDialog({
           ))}
         </div>
       )}
+      <div className="btn-row">
+        <button type="button" className="btn-secondary" onClick={onCancel}>
+          キャンセル
+        </button>
+      </div>
+    </dialog>
+  );
+}
+
+/** 並べ替えを選ぶシート（7-3）。下から出し、現在の選択にチェックを付ける */
+function SortSheet({
+  open,
+  value,
+  onPick,
+  onCancel,
+}: {
+  open: boolean;
+  value: SortKey;
+  onPick: (key: SortKey) => void;
+  onCancel: () => void;
+}) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => syncModal(ref.current, open), [open]);
+  return (
+    <dialog
+      className="sheet"
+      ref={ref}
+      tabIndex={-1}
+      onCancel={(e) => {
+        e.preventDefault();
+        onCancel();
+      }}
+      aria-labelledby="sort-title"
+      data-testid="sort-sheet"
+    >
+      <h2 id="sort-title">並べ替え</h2>
+      <div className="menu-list sheet-body">
+        {SORT_KEYS.map((k) => (
+          <button key={k} type="button" className="menu-item" aria-pressed={value === k} onClick={() => onPick(k)}>
+            <span className="menu-check" aria-hidden="true">
+              {value === k ? '✓' : ''}
+            </span>
+            {SORT_LABELS[k]}
+          </button>
+        ))}
+      </div>
       <div className="btn-row">
         <button type="button" className="btn-secondary" onClick={onCancel}>
           キャンセル

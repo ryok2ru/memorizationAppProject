@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Header } from '../components/Header';
 import { Switch } from '../components/Switch';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { InfoSheet } from '../components/InfoSheet';
 import { useAsync, errorMessage } from '../hooks';
 import { useSw } from '../SwContext';
 import { listFolders, resetProgress } from '../../db/repo';
@@ -39,6 +40,7 @@ export function Settings() {
   const [pendingBackup, setPendingBackup] = useState<Backup | null>(null);
   const [resetTarget, setResetTarget] = useState<string>('all');
   const [confirmReset, setConfirmReset] = useState(false);
+  const [info, setInfo] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const save = async (patch: Partial<SettingsType>) => {
@@ -194,10 +196,10 @@ export function Settings() {
       <section className="section">
         <h2>データ</h2>
         <div className="card">
-          <button type="button" className="btn-secondary" onClick={onExport} data-testid="export-backup">
+          <button type="button" className="btn-outline" onClick={onExport} data-testid="export-backup">
             バックアップを書き出す
           </button>
-          <button type="button" className="btn-secondary" onClick={() => fileRef.current?.click()}>
+          <button type="button" className="btn-outline" onClick={() => fileRef.current?.click()}>
             バックアップを読み込む
           </button>
           <input
@@ -227,7 +229,7 @@ export function Settings() {
               ))}
             </select>
           </label>
-          <button type="button" className="btn-danger" onClick={() => setConfirmReset(true)} data-testid="reset-progress">
+          <button type="button" className="btn-outline-danger" onClick={() => setConfirmReset(true)} data-testid="reset-progress">
             進捗をリセット
           </button>
         </div>
@@ -236,6 +238,12 @@ export function Settings() {
       <section className="section">
         <h2>アプリ情報</h2>
         <div className="card">
+          <button type="button" className="setting-row setting-link" onClick={() => setInfo(true)} data-testid="open-info">
+            <span>状態と評価の説明</span>
+            <span className="chevron" aria-hidden="true">
+              ›
+            </span>
+          </button>
           <div className="setting-row">
             <span>バージョン</span>
             <span>{__APP_VERSION__}</span>
@@ -250,6 +258,8 @@ export function Settings() {
           )}
         </div>
       </section>
+
+      <InfoSheet open={info} onClose={() => setInfo(false)} />
 
       <ConfirmDialog
         open={pendingBackup != null}

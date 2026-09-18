@@ -136,20 +136,52 @@ button:disabled,
   width: 100%;
 }
 
-/* 枠線のみのボタン（結果画面の「もう一度」） */
-.btn-outline {
+/* 枠線のみのボタン（結果画面の「もう一度」、設定のデータの 3 項目。7-8） */
+.btn-outline,
+.btn-outline-danger {
   background: none;
   border: 1.5px solid var(--accent);
   color: var(--accent);
   padding: 0 20px;
+  min-height: 48px;
   font-weight: 600;
   width: 100%;
+}
+
+/* 進捗リセットは Again 色 */
+.btn-outline-danger {
+  border-color: var(--again);
+  color: var(--again);
+}
+
+/* 押した瞬間に背景色が変わる。カード（--surface）の上でも分かる色にする */
+.btn-outline:active,
+.btn-outline-danger:active {
+  background: var(--border);
 }
 
 .btn-icon {
   font-size: 22px;
   color: var(--accent);
   padding: 0 8px;
+}
+
+/* ホーム右上の歯車と ⓘ。タップ領域（44px）は button の min-height / min-width のまま */
+.btn-icon-lg {
+  font-size: 26px;
+}
+
+/* フォルダカードの「…」。文字は行の下端に寄るので、点を 3 つ描いてカードの上下中央にそろえる（7-2） */
+.btn-menu {
+  flex: none;
+  gap: 3px;
+}
+
+.btn-menu > span {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--accent);
 }
 
 .btn-danger-solid {
@@ -455,6 +487,20 @@ textarea {
   min-width: 100px;
 }
 
+/* 設定のアプリ情報から InfoSheet を開く行（7-8） */
+.setting-link {
+  width: 100%;
+  padding: 0;
+  color: inherit;
+  text-align: left;
+}
+
+.setting-link .chevron {
+  flex: none;
+  color: var(--accent);
+  font-size: 20px;
+}
+
 .switch {
   width: 51px;
   height: 31px;
@@ -484,6 +530,33 @@ textarea {
 
 .switch[aria-checked='true']::after {
   transform: translateX(20px);
+}
+
+/* 単語一覧: フィルターの右に並べ替えボタンを置く（7-3） */
+.list-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.list-controls .segmented {
+  flex: 1;
+  min-width: 0;
+}
+
+.sort-btn {
+  flex: none;
+  min-width: 0;
+  background: var(--surface);
+  color: var(--accent);
+  border-radius: 10px;
+  padding: 0 12px;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.sort-btn:active {
+  background: var(--border);
 }
 
 .segmented {
@@ -642,6 +715,112 @@ dialog p {
 
 dialog .btn-row {
   margin-top: 16px;
+}
+
+/* 下から出るシート（7-9 の InfoSheet、単語一覧の並べ替え）。確認ダイアログと同じ背景・角丸で、上端だけ丸める */
+dialog.sheet {
+  width: 100%;
+  max-width: 480px;
+  max-height: 85dvh;
+  margin: auto auto 0;
+  padding: 20px 16px calc(12px + env(safe-area-inset-bottom));
+  border-radius: 16px 16px 0 0;
+  animation: sheet-up 0.2s ease-out;
+}
+
+/* 閉じているときの display: none（ブラウザ既定）を消さないよう、開いているときだけ縦並びにする */
+dialog.sheet[open] {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+.sheet h2 {
+  margin: 0;
+}
+
+.sheet h3 {
+  margin: 0;
+  font-size: 15px;
+  color: var(--muted);
+}
+
+.sheet-body {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sheet .btn-row {
+  margin-top: 4px;
+}
+
+.info-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.info-name {
+  font-weight: 700;
+}
+
+/* 確認ダイアログと同じシートの中に並べる行（フォルダのメニュー 7-2、並べ替え 7-3） */
+.menu-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.menu-item {
+  width: 100%;
+  min-height: 48px;
+  justify-content: flex-start;
+  text-align: left;
+  padding: 0 4px;
+  border-radius: 0;
+}
+
+/* 行の間だけに区切り線を入れる */
+.menu-item + .menu-item {
+  border-top: 1px solid var(--border);
+}
+
+/* 押した瞬間に背景色が変わる */
+.menu-item:active {
+  background: var(--border);
+}
+
+/* 「削除」は Again 色の文字 */
+.menu-item.danger {
+  color: var(--again);
+}
+
+.menu-item[aria-pressed='true'] {
+  font-weight: 600;
+}
+
+.menu-check {
+  flex: none;
+  width: 20px;
+  color: var(--accent);
+}
+
+.menu-cancel {
+  min-height: 48px;
 }
 
 /* ダイアログ内の選択肢の一覧（移動先フォルダ）。多いときは一覧だけスクロールする */
