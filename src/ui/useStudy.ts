@@ -15,7 +15,6 @@ import {
   type StudyMode,
 } from '../app/session';
 import { getWord } from '../db/repo';
-import { updateBadge } from '../app/badge';
 import type { Grade, Word } from '../domain/types';
 import { useSession } from './hooks';
 
@@ -66,8 +65,8 @@ export function useStudy(expected: (mode: StudyMode) => boolean) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shownKey]);
 
-  const finish = useCallback(async () => {
-    await updateBadge();
+  /** 結果画面へ。バッジは結果画面が表示時に更新する（6-3: キューを消化した時点でセッション完了） */
+  const finish = useCallback(() => {
     navigate('/study/result', { replace: true });
   }, [navigate]);
 
@@ -88,16 +87,16 @@ export function useStudy(expected: (mode: StudyMode) => boolean) {
       }
       setSession(next);
       setBusy(false);
-      if (isFinished(next)) await finish();
+      if (isFinished(next)) finish();
     },
     [word, busy, finish],
   );
 
-  const quit = useCallback(async () => {
+  const quit = useCallback(() => {
     const s = getSession();
     if (!s) return;
     setSession(endEarly(s));
-    await finish();
+    finish();
   }, [finish]);
 
   return {

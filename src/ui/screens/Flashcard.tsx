@@ -3,7 +3,7 @@ import { ProgressBar } from '../components/ProgressBar';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { useStudy } from '../useStudy';
 import { preview } from '../../domain/fsrs';
-import { GRADES, GRADE_LABELS, type Grade } from '../../domain/types';
+import { GRADES, GRADE_NAMES, type Grade } from '../../domain/types';
 
 const SWIPE_THRESHOLD = 60;
 
@@ -26,6 +26,7 @@ export function Flashcard() {
   }, [word?.id, session?.index]);
 
   const labels = useMemo(() => (word ? preview(word, Date.now()) : null), [word]);
+  const anyRequeue = labels != null && GRADES.some((g) => labels[g].requeue);
   const dragGrade = drag ? swipeGrade(drag.dx, drag.dy) : null;
 
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -96,7 +97,7 @@ export function Flashcard() {
         >
           {dragGrade && (
             <span className={`swipe-label grade-${dragGrade}`} data-testid="swipe-label">
-              {GRADE_LABELS[dragGrade]}
+              {GRADE_NAMES[dragGrade]}
             </span>
           )}
           {flipped ? (
@@ -121,11 +122,16 @@ export function Flashcard() {
             onClick={() => void rate(g)}
             data-testid={`grade-${g}`}
           >
-            {GRADE_LABELS[g]}
-            <small>{labels ? labels[g].label : ''}</small>
+            {GRADE_NAMES[g]}
+            <small data-testid={`preview-${g}`}>{labels ? labels[g].label : ''}</small>
           </button>
         ))}
       </div>
+      {anyRequeue && (
+        <p className="requeue-hint" data-testid="requeue-hint">
+          ↻ このセッションでもう一度出ます
+        </p>
+      )}
 
       <ConfirmDialog
         open={confirmQuit}

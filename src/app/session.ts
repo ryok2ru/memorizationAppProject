@@ -1,5 +1,5 @@
 import type { Grade, Word, ReviewLog } from '../domain/types';
-import { rate as fsrsRate, isFinitePayload } from '../domain/fsrs';
+import { rate as fsrsRate, isFinitePayload, isShortTermState } from '../domain/fsrs';
 import { saveRating } from '../db/repo';
 import type { SessionKind } from './queue';
 
@@ -54,7 +54,7 @@ export function applyRating(s: SessionState, wordId: string, grade: Grade, updat
     ...s.items,
     [wordId]: { ...item, firstRating: item.firstRating ?? grade },
   };
-  const queue = updated.state === 1 || updated.state === 3 ? [...s.queue, wordId] : s.queue;
+  const queue = isShortTermState(updated.state) ? [...s.queue, wordId] : s.queue;
   const index = s.index + 1;
   const next: SessionState = { ...s, items, queue, index, lastDue: { ...s.lastDue, [wordId]: updated.due } };
   if (index >= queue.length) next.finishedAt = now;

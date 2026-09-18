@@ -3,6 +3,7 @@ import { ProgressBar } from '../components/ProgressBar';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { useStudy } from '../useStudy';
 import { checkEn, checkJa, splitCandidates } from '../../domain/normalize';
+import { GRADE_NAMES } from '../../domain/types';
 
 export function Typing() {
   const { session, word, message, busy, rate, quit, remaining, completed } = useStudy((m) => m === 'enToJa' || m === 'jaToEn');
@@ -124,11 +125,11 @@ export function Typing() {
 
           {judged === 'ok' && (
             <div className="btn-row">
-              <button type="button" className="grade-btn grade-3" disabled={busy} onClick={() => void rate(3)}>
-                普通
+              <button type="button" className="grade-btn grade-3" disabled={busy} onClick={() => void rate(3)} data-testid="grade-3">
+                {GRADE_NAMES[3]}
               </button>
-              <button type="button" className="grade-btn grade-4" disabled={busy} onClick={() => void rate(4)}>
-                簡単
+              <button type="button" className="grade-btn grade-4" disabled={busy} onClick={() => void rate(4)} data-testid="grade-4">
+                {GRADE_NAMES[4]}
               </button>
             </div>
           )}

@@ -7,7 +7,7 @@ import { loadSettings } from '../../app/settings';
 import { finishToday } from '../../app/notify';
 import { updateBadge } from '../../app/badge';
 import { formatDuration, nextReviewLabel } from '../../domain/dates';
-import { GRADES, GRADE_NAMES, GRADE_LABELS } from '../../domain/types';
+import { GRADES, GRADE_NAMES } from '../../domain/types';
 
 export function Result() {
   const navigate = useNavigate();
@@ -67,11 +67,7 @@ export function Result() {
       <div className="result-bars" aria-label="評価内訳">
         {GRADES.map((g) => (
           <div key={g} className="result-bar">
-            <span>
-              {GRADE_NAMES[g]}
-              <br />
-              <span className="small muted">{GRADE_LABELS[g]}</span>
-            </span>
+            <span>{GRADE_NAMES[g]}</span>
             <div className="track">
               <div
                 className={`fill grade-${g}`}

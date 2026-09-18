@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Header } from '../components/Header';
 import { SummaryCard } from '../components/SummaryCard';
@@ -7,7 +7,7 @@ import { EmptyState } from '../components/EmptyState';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { InputDialog } from '../components/InputDialog';
 import { useAsync, isStandalone, errorMessage } from '../hooks';
-import { createFolder, deleteFolder, listFolders, renameFolder } from '../../db/repo';
+import { createFolder, deleteFolder, listAllWords, listFolders, renameFolder } from '../../db/repo';
 import { loadOverview, loadFolderStats, type FolderStats } from '../../app/stats';
 import { loadStreak, streakMessage } from '../../app/streak';
 import { loadSettings, requestPersistentStorage } from '../../app/settings';
@@ -15,7 +15,10 @@ import { finishToday, needsRefresh } from '../../app/notify';
 import { updateBadge } from '../../app/badge';
 import { validateFolderName } from '../../domain/validation';
 import { formatShortDateTime } from '../../domain/dates';
-import { LIMITS, type Folder } from '../../domain/types';
+import { LIMITS, type Folder, type Word } from '../../domain/types';
+
+/** 検索結果の表示上限。超えた分は絞り込みを促す */
+const MAX_RESULTS = 100;
 
 interface HomeData {
   folders: Folder[];
@@ -42,10 +45,29 @@ export function Home() {
   const [deleting, setDeleting] = useState<Folder | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [standalone] = useState(() => isStandalone());
+  const [query, setQuery] = useState('');
+  const [debounced, setDebounced] = useState('');
 
   useEffect(() => {
     void updateBadge();
   }, []);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(query), 300);
+    return () => clearTimeout(t);
+  }, [query]);
+
+  // 全フォルダ横断の検索（7-2）。1 文字以上入力したときだけ全単語を読む
+  const searching = debounced.trim() !== '';
+  const { data: allWords } = useAsync<Word[] | null>(() => (searching ? listAllWords() : Promise.resolve(null)), [searching, data]);
+  const results = useMemo(() => {
+    if (!searching || !allWords) return [];
+    const q = debounced.trim().toLowerCase();
+    return allWords
+      .filter((w) => w.englishTerm.toLowerCase().includes(q) || w.japaneseDefinition.toLowerCase().includes(q))
+      .sort((a, b) => a.englishTerm.localeCompare(b.englishTerm));
+  }, [searching, allWords, debounced]);
+  const folderName = (id: string) => data?.folders.find((f) => f.id === id)?.name ?? '';
 
   const existingNames = (except?: string) => (data?.folders ?? []).filter((f) => f.id !== except).map((f) => f.name);
 
@@ -126,6 +148,14 @@ export function Home() {
         </div>
       )}
 
+      <input
+        type="search"
+        placeholder="全フォルダから検索（英語・日本語訳）"
+        aria-label="全フォルダから検索"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+      />
+
       {data && (
         <>
           <SummaryCard
@@ -141,18 +171,46 @@ export function Home() {
 
           <StateBar counts={data.overview.byState} />
 
-          {data.folders.length === 0 ? (
+          {searching ? (
+            allWords == null ? null : results.length === 0 ? (
+              <EmptyState message="該当する単語がありません" />
+            ) : (
+              <>
+                <div className="small muted center" data-testid="search-count">
+                  {results.length > MAX_RESULTS ? `${results.length}件中${MAX_RESULTS}件を表示。さらに絞り込んでください` : `${results.length}件`}
+                </div>
+                <ul className="word-list" aria-label="検索結果">
+                  {results.slice(0, MAX_RESULTS).map((w) => (
+                    <li key={w.id} className="word-row">
+                      <Link to={`/words/${w.id}`} className="btn word-row-main">
+                        <span className="row-text">
+                          <span className="row-title">{w.englishTerm}</span>
+                          <span className="row-sub">{w.japaneseDefinition}</span>
+                        </span>
+                        <span className="row-side">{folderName(w.folderId)}</span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )
+          ) : data.folders.length === 0 ? (
             <EmptyState message="フォルダがありません。＋で追加してください" />
           ) : (
-            <ul className="list" aria-label="フォルダ一覧">
+            <ul className="folder-list" aria-label="フォルダ一覧">
               {data.folders.map((f) => {
                 const s = data.stats[f.id] ?? { total: 0, due: 0 };
                 return (
-                  <li key={f.id} className="row">
-                    <Link to={`/folders/${f.id}`} className="btn row-main">
-                      <span className="row-title">{f.name}</span>
-                      <span className="row-sub">
-                        {s.total}語 ・ 今日の復習 {s.due}語
+                  <li key={f.id} className="folder-card">
+                    <Link to={`/folders/${f.id}`} className="btn folder-main">
+                      <span className="folder-icon" aria-hidden="true">
+                        📁
+                      </span>
+                      <span className="row-text">
+                        <span className="row-title">{f.name}</span>
+                        <span className="row-sub">
+                          {s.total}語 ・ 今日の復習 {s.due}語
+                        </span>
                       </span>
                     </Link>
                     <button type="button" className="btn-icon" aria-label={`${f.name} のメニュー`} onClick={() => setMenuFolder(f)}>

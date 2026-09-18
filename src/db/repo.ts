@@ -124,9 +124,15 @@ export async function updateWordText(
 
 /** 単語と ReviewLog を削除 */
 export async function deleteWord(id: string): Promise<void> {
+  await deleteWords([id]);
+}
+
+/** 複数の単語と ReviewLog を 1 トランザクションで削除 */
+export async function deleteWords(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
   await db.transaction('rw', db.words, db.reviewLogs, async () => {
-    await db.reviewLogs.where('wordId').equals(id).delete();
-    await db.words.delete(id);
+    await db.reviewLogs.where('wordId').anyOf(ids).delete();
+    await db.words.bulkDelete(ids);
   });
 }
 

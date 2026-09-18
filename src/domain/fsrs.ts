@@ -5,9 +5,8 @@ import {
   type Card,
   type Grade as TsGrade,
 } from 'ts-fsrs';
-import type { Word, FsrsFields, ReviewLog, Grade } from './types';
+import type { Word, FsrsFields, ReviewLog, Grade, CardState } from './types';
 import { GRADES } from './types';
-import { endOfDay } from './dates';
 
 export const scheduler = fsrs(
   generatorParameters({
@@ -15,9 +14,9 @@ export const scheduler = fsrs(
     maximum_interval: 36500,
     enable_fuzz: false,
     enable_short_term: true,
-    // 設計書 5-2 は ['10m'] だが、ts-fsrs 5.4 では 1 段だと New に Good で
-    // 直接 Review に進み、5-3 / 12-1 の「10 分後に 1 回再出題」にならない。
-    // 2 段にすると Good で 10 分後に再出題され、次の Good で Review に進む。
+    // ts-fsrs 5.4 では New に Good で「次のステップ」に進むため、1 段だと
+    // 直接 Review に進む。2 段にすると Good で 10 分後に再出題され、次の Good で
+    // Review に進む（設計書 5-2）。
     learning_steps: ['10m', '10m'],
     relearning_steps: ['10m'],
   }),
@@ -115,14 +114,20 @@ export function rate(word: Word, grade: Grade, now: number): { word: Word; log: 
 
 export interface PreviewItem {
   due: number;
+  /** 更新後の state が 1 か 3。10 分ステップで当日中に再出題される（6-3 の再出題条件と同じ） */
+  requeue: boolean;
+  /** requeue なら「↻」、それ以外は scheduled_days で「N日後」 */
   label: string;
 }
 
-/** due − now が 60 分未満なら「N分後」、当日中なら「今日」、それ以外は scheduled_days で「N日後」 */
-export function previewLabel(due: number, scheduledDays: number, now: number): string {
-  const diffMin = (due - now) / 60000;
-  if (diffMin < 60) return `${Math.max(1, Math.round(diffMin))}分後`;
-  if (due <= endOfDay(now)) return '今日';
+export const REQUEUE_LABEL = '↻';
+
+/** 6-3 手順 4 の再出題条件: 更新後の state が Learning か Relearning */
+export const isShortTermState = (state: CardState): boolean => state === 1 || state === 3;
+
+/** requeue なら「↻」、それ以外は scheduled_days で「N日後」（5-4） */
+export function previewLabel(state: CardState, scheduledDays: number): string {
+  if (isShortTermState(state)) return REQUEUE_LABEL;
   return `${Math.max(1, Math.round(scheduledDays))}日後`;
 }
 
@@ -131,8 +136,8 @@ export function preview(word: Word, now: number): Record<Grade, PreviewItem> {
   const result = {} as Record<Grade, PreviewItem>;
   for (const g of GRADES) {
     const { card } = record[g as TsGrade];
-    const due = card.due.getTime();
-    result[g] = { due, label: previewLabel(due, card.scheduled_days, now) };
+    const state = card.state as CardState;
+    result[g] = { due: card.due.getTime(), requeue: isShortTermState(state), label: previewLabel(state, card.scheduled_days) };
   }
   return result;
 }

@@ -8,6 +8,7 @@ import {
   createWord,
   deleteFolder,
   deleteWord,
+  deleteWords,
   ensureFsrsFields,
   getSettings,
   getWord,
@@ -94,6 +95,24 @@ describe('words and queries', () => {
     await deleteWord(w.id);
     expect(await getWord(w.id)).toBeUndefined();
     expect((await listReviewLogsForWord(w.id)).length).toBe(0);
+  });
+
+  it('deleteWords removes several words and their review logs in one go', async () => {
+    const f = await createFolder('A', now);
+    const a = await createWord({ folderId: f.id, englishTerm: 'a', japaneseDefinition: 'あ', memo: '' }, now);
+    const b = await createWord({ folderId: f.id, englishTerm: 'b', japaneseDefinition: 'い', memo: '' }, now);
+    const c = await createWord({ folderId: f.id, englishTerm: 'c', japaneseDefinition: 'う', memo: '' }, now);
+    for (const w of [a, b, c]) {
+      const r = rate(w, 3, now);
+      await saveRating(r.word, r.log);
+    }
+    await deleteWords([a.id, c.id]);
+    expect(await getWord(a.id)).toBeUndefined();
+    expect(await getWord(b.id)).toBeDefined();
+    expect(await getWord(c.id)).toBeUndefined();
+    expect(await db.reviewLogs.count()).toBe(1);
+    await deleteWords([]);
+    expect(await db.words.count()).toBe(1);
   });
 
   it('resetProgress reinitialises FSRS fields but keeps logs', async () => {
