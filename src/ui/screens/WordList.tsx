@@ -6,10 +6,10 @@ import { EmptyState } from '../components/EmptyState';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { SwipeRow } from '../components/SwipeRow';
 import { useAsync, errorMessage } from '../hooks';
-import { deleteWord, deleteWords, getFolder, listWordsInFolder } from '../../db/repo';
+import { deleteWord, deleteWords, getFolder, listFolders, listWordsInFolder, moveWords } from '../../db/repo';
 import { updateBadge } from '../../app/badge';
 import { endOfDay, relativeDueLabel } from '../../domain/dates';
-import { LIMITS, STATE_ICONS, STATE_NAMES, type CardState, type Word } from '../../domain/types';
+import { LIMITS, STATE_ICONS, STATE_NAMES, type CardState, type Folder, type Word } from '../../domain/types';
 
 type Filter = 'all' | 'due' | 'mastered';
 
@@ -17,14 +17,16 @@ const FILTER_LABELS: Record<Filter, string> = { all: 'すべて', due: '要復�
 
 /** スワイプ削除の「元に戻す」を表示する時間 */
 export const UNDO_MS = 5000;
+/** 「N件を移動しました」を表示する時間 */
+export const MOVED_MS = 3000;
 
 export function WordList() {
   const { folderId = '' } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
   const { data, reload } = useAsync(async () => {
-    const [folder, words] = await Promise.all([getFolder(folderId), listWordsInFolder(folderId)]);
-    return { folder, words };
+    const [folder, words, folders] = await Promise.all([getFolder(folderId), listWordsInFolder(folderId), listFolders()]);
+    return { folder, words, folders };
   }, [folderId]);
   const [query, setQuery] = useState('');
   const [debounced, setDebounced] = useState('');
@@ -34,6 +36,7 @@ export function WordList() {
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [confirmBulk, setConfirmBulk] = useState(false);
+  const [moving, setMoving] = useState(false);
   const [pending, setPending] = useState<Word | null>(null);
   const pendingRef = useRef<{ word: Word; timer: ReturnType<typeof setTimeout> } | null>(null);
   const now = Date.now();
@@ -49,6 +52,8 @@ export function WordList() {
   }, [location.state, location.pathname, navigate]);
 
   const words = data?.words ?? [];
+  /** 移動先の候補: 現在のフォルダを除く */
+  const otherFolders = useMemo(() => (data?.folders ?? []).filter((f) => f.id !== folderId), [data, folderId]);
   const byState = useMemo(() => {
     const c: Record<CardState, number> = { 0: 0, 1: 0, 2: 0, 3: 0 };
     for (const w of words) c[w.state] += 1;
@@ -135,6 +140,22 @@ export function WordList() {
       await updateBadge();
       exitSelect();
       reload();
+    } catch (e) {
+      setMessage(errorMessage(e));
+    }
+  };
+
+  /** 選択中の単語を dest へまとめて移動（7-3）。folderId と updatedAt だけを 1 トランザクションで更新する */
+  const bulkMove = async (dest: Folder) => {
+    setMoving(false);
+    const ids = [...selected];
+    try {
+      const n = await moveWords(ids, dest.id);
+      exitSelect();
+      reload();
+      const text = `${n}件を移動しました`;
+      setMessage(text);
+      setTimeout(() => setMessage((m) => (m === text ? null : m)), MOVED_MS);
     } catch (e) {
       setMessage(errorMessage(e));
     }
@@ -244,9 +265,14 @@ export function WordList() {
 
       <div className="fixed-bottom">
         {selecting ? (
-          <button type="button" className="btn-danger-solid" disabled={selected.size === 0} onClick={() => setConfirmBulk(true)} data-testid="bulk-delete">
-            {selected.size}件を削除
-          </button>
+          <div className="btn-row">
+            <button type="button" className="btn-secondary" disabled={selected.size === 0} onClick={() => setMoving(true)} data-testid="bulk-move">
+              移動
+            </button>
+            <button type="button" className="btn-danger-solid" disabled={selected.size === 0} onClick={() => setConfirmBulk(true)} data-testid="bulk-delete">
+              {selected.size}件を削除
+            </button>
+          </div>
         ) : (
           <button
             type="button"
@@ -268,6 +294,60 @@ export function WordList() {
         onConfirm={() => void bulkDelete()}
         onCancel={() => setConfirmBulk(false)}
       />
+
+      <MoveDialog open={moving} folders={otherFolders} count={selected.size} onPick={(f) => void bulkMove(f)} onCancel={() => setMoving(false)} />
     </div>
+  );
+}
+
+/** 移動先フォルダを選ぶダイアログ。folders は現在のフォルダを除いた一覧 */
+function MoveDialog({
+  open,
+  folders,
+  count,
+  onPick,
+  onCancel,
+}: {
+  open: boolean;
+  folders: Folder[];
+  count: number;
+  onPick: (folder: Folder) => void;
+  onCancel: () => void;
+}) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (open && !el.open) el.showModal();
+    else if (!open && el.open) el.close();
+  }, [open]);
+  return (
+    <dialog
+      ref={ref}
+      onCancel={(e) => {
+        e.preventDefault();
+        onCancel();
+      }}
+      aria-labelledby="move-title"
+      data-testid="move-dialog"
+    >
+      <h2 id="move-title">{count}件の移動先</h2>
+      {folders.length === 0 ? (
+        <p>移動先のフォルダがありません</p>
+      ) : (
+        <div className="dialog-list">
+          {folders.map((f) => (
+            <button key={f.id} type="button" className="btn-secondary" onClick={() => onPick(f)}>
+              <span aria-hidden="true">📁</span> {f.name}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="btn-row">
+        <button type="button" className="btn-secondary" onClick={onCancel}>
+          キャンセル
+        </button>
+      </div>
+    </dialog>
   );
 }
