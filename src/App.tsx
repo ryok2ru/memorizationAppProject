@@ -30,6 +30,8 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/folders/:folderId" element={<WordList />} />
+            {/* 全フォルダの ★ 付き単語（7-2、7-3） */}
+            <Route path="/favorites" element={<WordList favorites />} />
             <Route path="/folders/:folderId/words/new" element={<WordForm />} />
             <Route path="/words/:wordId" element={<WordForm />} />
             <Route path="/study/select" element={<ModeSelect />} />

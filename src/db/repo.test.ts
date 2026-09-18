@@ -4,6 +4,7 @@ import {
   clearAll,
   countByState,
   countNewWords,
+  countWords,
   createFolder,
   createWord,
   deleteFolder,
@@ -13,6 +14,7 @@ import {
   getSettings,
   getWord,
   listDueWords,
+  listFavoriteWords,
   listNewWords,
   listReviewLogsForWord,
   listReviewTimes,
@@ -23,6 +25,8 @@ import {
   revertRating,
   saveRating,
   saveSettings,
+  setFavorite,
+  setFavorites,
   updateWordText,
 } from './repo';
 import { rate } from '../domain/fsrs';
@@ -77,14 +81,14 @@ describe('words and queries', () => {
     const r3 = rate(w3, 3, addDays(now, -3));
     await saveRating(r3.word, r3.log);
 
-    const all = await listDueWords(null, now);
+    const all = await listDueWords('all', now);
     expect(all.map((w) => w.id)).toEqual([w3.id, w1.id]);
     const inF = await listDueWords(f.id, now);
     expect(inF.map((w) => w.id)).toEqual([w1.id]);
 
     const news = await listNewWords(f.id, now);
     expect(news.map((w) => w.englishTerm)).toEqual(['d']);
-    expect(await countNewWords(null)).toBe(1);
+    expect(await countNewWords('all')).toBe(1);
     const byState = await countByState(f.id);
     expect(byState).toEqual({ 0: 1, 1: 1, 2: 1, 3: 0 });
   });
@@ -264,5 +268,83 @@ describe('revertRating', () => {
     await revertRating(w.id, w, 'orphan');
     expect(await db.reviewLogs.count()).toBe(0);
     expect(await getWord(w.id)).toBeUndefined();
+  });
+});
+
+describe('お気に入り（4-3、4-6、7-3）', () => {
+  it('新しい単語の favorite は false で、setFavorite が付け外しする', async () => {
+    const f = await createFolder('A', now);
+    const w = await createWord({ folderId: f.id, englishTerm: 'a', japaneseDefinition: 'あ', memo: '' }, now);
+    expect(w.favorite).toBe(false);
+    expect((await getWord(w.id))?.favorite).toBe(false);
+
+    await setFavorite(w.id, true, now + 1);
+    expect((await getWord(w.id))?.favorite).toBe(true);
+    expect((await getWord(w.id))?.updatedAt).toBe(now + 1);
+
+    await setFavorite(w.id, false, now + 2);
+    expect((await getWord(w.id))?.favorite).toBe(false);
+  });
+
+  it('setFavorites がまとめて付け外しし、件数を返す', async () => {
+    const f = await createFolder('A', now);
+    const a = await createWord({ folderId: f.id, englishTerm: 'a', japaneseDefinition: 'あ', memo: '' }, now);
+    const b = await createWord({ folderId: f.id, englishTerm: 'b', japaneseDefinition: 'い', memo: '' }, now);
+    const c = await createWord({ folderId: f.id, englishTerm: 'c', japaneseDefinition: 'う', memo: '' }, now);
+
+    expect(await setFavorites([a.id, c.id], true, now + 1)).toBe(2);
+    expect((await listFavoriteWords()).map((w) => w.id).sort()).toEqual([a.id, c.id].sort());
+    expect((await getWord(b.id))?.favorite).toBe(false);
+
+    expect(await setFavorites([a.id], false, now + 2)).toBe(1);
+    expect((await listFavoriteWords()).map((w) => w.id)).toEqual([c.id]);
+    expect(await setFavorites([], true)).toBe(0);
+  });
+
+  it("scope = 'favorites' のクエリが ★ 付きだけを見る", async () => {
+    const f = await createFolder('A', now);
+    const g = await createFolder('B', now);
+    // ★ 付き: 復習対象 1 件（別フォルダ）と New 1 件。★ なし: 復習対象 1 件と New 1 件
+    const dueFav = await createWord({ folderId: g.id, englishTerm: 'a', japaneseDefinition: 'あ', memo: '' }, now);
+    const duePlain = await createWord({ folderId: f.id, englishTerm: 'b', japaneseDefinition: 'い', memo: '' }, now);
+    const newFav = await createWord({ folderId: f.id, englishTerm: 'c', japaneseDefinition: 'う', memo: '' }, now);
+    await createWord({ folderId: f.id, englishTerm: 'd', japaneseDefinition: 'え', memo: '' }, now);
+    for (const w of [dueFav, duePlain]) {
+      const r = rate(w, 3, now);
+      await saveRating(r.word, r.log);
+    }
+    await setFavorites([dueFav.id, newFav.id], true, now);
+
+    expect((await listDueWords('favorites', now)).map((w) => w.id)).toEqual([dueFav.id]);
+    expect((await listNewWords('favorites', now)).map((w) => w.id)).toEqual([newFav.id]);
+    expect(await countNewWords('favorites')).toBe(1);
+    // ホームの「★ お気に入り」カードの件数（7-2）
+    expect(await countWords('favorites')).toBe(2);
+    expect(await countWords('all')).toBe(4);
+    expect(await countByState('favorites')).toEqual({ 0: 1, 1: 1, 2: 0, 3: 0 });
+    // フォルダと全フォルダの集計は ★ に関係なく全件を見る
+    expect(await countWords(f.id)).toBe(3);
+  });
+
+  it('フォルダ移動と進捗リセットでは favorite を変えない', async () => {
+    const f = await createFolder('A', now);
+    const g = await createFolder('B', now);
+    const w = await createWord({ folderId: f.id, englishTerm: 'a', japaneseDefinition: 'あ', memo: '' }, now);
+    const r = rate(w, 3, now);
+    await saveRating(r.word, r.log);
+    await setFavorite(w.id, true, now);
+
+    await moveWords([w.id], g.id, now + 1);
+    expect((await getWord(w.id))?.favorite).toBe(true);
+
+    await resetProgress(null, now + 2);
+    const after = await getWord(w.id);
+    expect(after?.favorite).toBe(true);
+    expect(after?.state).toBe(0);
+  });
+
+  it('favorite が無いレコードは読み込み時に false として扱う', () => {
+    const partial = { id: 'x', folderId: 'f', englishTerm: 'a', japaneseDefinition: 'b', memo: '', createdAt: now, updatedAt: now } as Word;
+    expect(ensureFsrsFields(partial, now).favorite).toBe(false);
   });
 });

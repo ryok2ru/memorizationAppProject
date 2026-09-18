@@ -11,6 +11,7 @@ const mk = (id: string, due: number, state: 0 | 2 = 2): Word => ({
   englishTerm: id,
   japaneseDefinition: id,
   memo: '',
+  favorite: false,
   createdAt: now,
   updatedAt: now,
   ...newCardFields(now),

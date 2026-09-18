@@ -11,7 +11,7 @@ export async function updateBadge(now = Date.now()): Promise<void> {
   const nav = navigator as BadgeNavigator;
   if (!('setAppBadge' in nav) || typeof nav.setAppBadge !== 'function') return;
   try {
-    const n = await countDueWords(null, now);
+    const n = await countDueWords('all', now);
     if (n > 0) await nav.setAppBadge(n);
     else if (typeof nav.clearAppBadge === 'function') await nav.clearAppBadge();
     else await nav.setAppBadge(0);

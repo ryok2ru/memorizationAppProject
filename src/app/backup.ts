@@ -4,7 +4,8 @@ import { readSnapshot, replaceAll, type Snapshot } from '../db/repo';
 
 export interface Backup {
   app: 'VocaVault';
-  schemaVersion: 1;
+  /** 書き出しは常に BACKUP_SCHEMA_VERSION。読み込みは SUPPORTED_SCHEMA_VERSIONS を受け付ける（10-2） */
+  schemaVersion: number;
   exportedAt: number;
   folders: Folder[];
   words: Word[];
@@ -12,12 +13,16 @@ export interface Backup {
   settings: Settings;
 }
 
-export const BACKUP_SCHEMA_VERSION = 1;
+/** 書き出す schemaVersion。Dexie のバージョンと同じ番号（4-7） */
+export const BACKUP_SCHEMA_VERSION = 2;
+
+/** 読み込めるバージョン。1 は favorite が無いので false として扱う */
+export const SUPPORTED_SCHEMA_VERSIONS: readonly number[] = [1, 2];
 
 export function buildBackup(snapshot: Snapshot, now = Date.now()): Backup {
   return {
     app: 'VocaVault',
-    schemaVersion: 1,
+    schemaVersion: BACKUP_SCHEMA_VERSION,
     exportedAt: now,
     folders: snapshot.folders,
     words: snapshot.words,
@@ -50,15 +55,18 @@ export function parseBackup(text: string): Backup {
   }
   if (typeof data !== 'object' || data === null) throw new BackupFormatError();
   const b = data as Partial<Backup>;
-  if (b.app !== 'VocaVault' || b.schemaVersion !== BACKUP_SCHEMA_VERSION) throw new BackupFormatError();
+  if (b.app !== 'VocaVault' || typeof b.schemaVersion !== 'number' || !SUPPORTED_SCHEMA_VERSIONS.includes(b.schemaVersion)) {
+    throw new BackupFormatError();
+  }
   if (!Array.isArray(b.folders) || !Array.isArray(b.words) || !Array.isArray(b.reviewLogs)) throw new BackupFormatError();
-  const settings: Settings = { ...DEFAULT_SETTINGS, ...(b.settings ?? {}), id: 'app', schemaVersion: 1 };
+  const settings: Settings = { ...DEFAULT_SETTINGS, ...(b.settings ?? {}), id: 'app', schemaVersion: BACKUP_SCHEMA_VERSION };
   return {
     app: 'VocaVault',
-    schemaVersion: 1,
+    schemaVersion: BACKUP_SCHEMA_VERSION,
     exportedAt: typeof b.exportedAt === 'number' ? b.exportedAt : 0,
     folders: b.folders,
-    words: b.words,
+    // favorite が無いレコード（schemaVersion 1 のファイル）は false として読む（4-3、10-2）
+    words: b.words.map((w) => ({ ...w, favorite: w?.favorite === true })),
     reviewLogs: b.reviewLogs,
     settings,
   };

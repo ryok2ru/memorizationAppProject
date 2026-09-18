@@ -7,9 +7,11 @@ interface Props {
   back?: string | 'back';
   right?: ReactNode;
   left?: ReactNode;
+  /** タイトルのすぐ右に置くもの（単語フォームの ☆。7-4） */
+  titleRight?: ReactNode;
 }
 
-export function Header({ title, back, right, left }: Props) {
+export function Header({ title, back, right, left, titleRight }: Props) {
   const navigate = useNavigate();
   return (
     <header className="header">
@@ -26,7 +28,10 @@ export function Header({ title, back, right, left }: Props) {
         )}
         {left}
       </div>
-      <h1>{title}</h1>
+      <div className="header-title">
+        <h1>{title}</h1>
+        {titleRight}
+      </div>
       <div className="header-side right">{right}</div>
     </header>
   );

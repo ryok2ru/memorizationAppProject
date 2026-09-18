@@ -7,62 +7,100 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { SwipeRow } from '../components/SwipeRow';
 import { syncModal } from '../components/modal';
 import { useAsync, errorMessage } from '../hooks';
-import { deleteWord, deleteWords, getFolder, listFolders, listWordsInFolder, moveWords } from '../../db/repo';
+import {
+  deleteWord,
+  deleteWords,
+  getFolder,
+  listFavoriteWords,
+  listFolders,
+  listWordsInFolder,
+  moveWords,
+  setFavorites,
+} from '../../db/repo';
 import { updateBadge } from '../../app/badge';
 import { endOfDay, relativeDueLabel } from '../../domain/dates';
-import { LIMITS, STATE_ICONS, STATE_NAMES, type CardState, type Folder, type Word } from '../../domain/types';
+import { FAVORITES, LIMITS, STATE_ICONS, STATE_NAMES, type CardState, type Folder, type Word } from '../../domain/types';
 
 type Filter = 'all' | 'due' | 'mastered';
 
 const FILTER_LABELS: Record<Filter, string> = { all: 'すべて', due: '要復習', mastered: '習得済み' };
 
-/** 並べ替えの種類（7-3）。選択は保存せず、一覧を開くたびに DEFAULT_SORT に戻す */
-export type SortKey = 'createdDesc' | 'createdAsc' | 'alpha' | 'state' | 'due';
+/** 並べ替えの基準（7-3）。選択も向きも保存せず、一覧を開くたびに既定に戻す */
+export type SortKey = 'created' | 'alpha' | 'state' | 'due' | 'favorite';
 
-export const SORT_KEYS: SortKey[] = ['createdDesc', 'createdAsc', 'alpha', 'state', 'due'];
+/** 並べ替えの向き。asc は下の COMPARATORS の順、desc はその逆順 */
+export type SortDir = 'asc' | 'desc';
 
-export const DEFAULT_SORT: SortKey = 'createdDesc';
+export const SORT_KEYS: SortKey[] = ['created', 'alpha', 'state', 'due', 'favorite'];
 
-/** シートに出す名前 */
+export const DEFAULT_SORT: SortKey = 'created';
+
+/** シートとボタンに出す名前（基準名のみ。向きは隣のボタンで示す） */
 export const SORT_LABELS: Record<SortKey, string> = {
-  createdDesc: '登録日（新しい順）',
-  createdAsc: '登録日（古い順）',
-  alpha: 'アルファベット順（A→Z）',
+  created: '登録日',
+  alpha: 'アルファベット',
   state: '学習状態',
   due: '次回の復習日',
+  favorite: 'お気に入り',
 };
 
-/** ボタンに出す短い名前 */
-export const SORT_SHORT_LABELS: Record<SortKey, string> = {
-  createdDesc: '新しい順',
-  createdAsc: '古い順',
-  alpha: 'A→Z',
-  state: '学習状態',
-  due: '復習日',
+/** 基準を変えたときに戻す向き（7-3）。登録日だけ降順（新しい順）が既定 */
+export const DEFAULT_DIR: Record<SortKey, SortDir> = {
+  created: 'desc',
+  alpha: 'asc',
+  state: 'asc',
+  due: 'asc',
+  favorite: 'desc',
 };
+
+/** 向きの切り替えボタンに出す記号 */
+export const DIR_MARKS: Record<SortDir, string> = { asc: '↑', desc: '↓' };
+
+/** 向きを含めた並びの説明（読み上げとボタンの aria-label 用） */
+export const SORT_DIR_LABELS: Record<SortKey, Record<SortDir, string>> = {
+  created: { asc: '古い順', desc: '新しい順' },
+  alpha: { asc: 'A→Z', desc: 'Z→A' },
+  state: { asc: 'New → Learning → Relearning → Review', desc: 'Review → Relearning → Learning → New' },
+  due: { asc: '近い順（未学習は最後）', desc: '遠い順（未学習は最初）' },
+  favorite: { asc: '☆ なしが上', desc: '★ 付きが上' },
+};
+
+export const flipDir = (dir: SortDir): SortDir => (dir === 'asc' ? 'desc' : 'asc');
 
 /** 学習状態の並び: New → Learning → Relearning → Review */
 const STATE_RANK: Record<CardState, number> = { 0: 0, 1: 1, 2: 3, 3: 2 };
 
+/**
+ * 基準ごとの昇順（asc）の比較。降順は結果をそのまま逆順にするので、
+ * 同点の並び（未学習の位置や同じグループ内の登録日）もまとめて反転する（7-3）。
+ */
+const COMPARATORS: Record<SortKey, (a: Word, b: Word) => number> = {
+  created: (a, b) => a.createdAt - b.createdAt,
+  alpha: (a, b) => a.englishTerm.localeCompare(b.englishTerm) || a.createdAt - b.createdAt,
+  // 同じ状態の中は due 昇順
+  state: (a, b) => STATE_RANK[a.state] - STATE_RANK[b.state] || a.due - b.due || a.createdAt - b.createdAt,
+  // 未学習（state = 0）は最後に回し、それ以外は due の近い順
+  due: (a, b) =>
+    Number(a.state === 0) - Number(b.state === 0) || (a.state === 0 ? 0 : a.due - b.due) || a.createdAt - b.createdAt,
+  // asc は ☆ なしが先。desc（既定）にすると ★ 付きが上で、同じグループ内は登録日の新しい順になる
+  favorite: (a, b) => Number(a.favorite) - Number(b.favorite) || a.createdAt - b.createdAt,
+};
+
 /** フィルターと検索の結果に対して並べ替える（7-3）。入力の配列は変えない */
-export function sortWords(words: Word[], key: SortKey): Word[] {
-  const list = words.slice();
-  switch (key) {
-    case 'createdAsc':
-      return list.sort((a, b) => a.createdAt - b.createdAt);
-    case 'alpha':
-      return list.sort((a, b) => a.englishTerm.localeCompare(b.englishTerm));
-    case 'state':
-      // 同じ状態の中は due 昇順
-      return list.sort((a, b) => STATE_RANK[a.state] - STATE_RANK[b.state] || a.due - b.due);
-    case 'due':
-      // 未学習（state = 0）は最後に回し、それ以外は due の近い順
-      return list.sort((a, b) => Number(a.state === 0) - Number(b.state === 0) || (a.state === 0 ? 0 : a.due - b.due));
-    case 'createdDesc':
-    default:
-      return list.sort((a, b) => b.createdAt - a.createdAt);
-  }
+export function sortWords(words: Word[], key: SortKey, dir: SortDir = DEFAULT_DIR[key]): Word[] {
+  const list = words.slice().sort(COMPARATORS[key]);
+  return dir === 'asc' ? list : list.reverse();
 }
+
+/** 選択した単語の ☆ を切り替えたあとのトースト（7-3） */
+export const favoriteMessage = (n: number, on: boolean): string =>
+  on ? `${n}件をお気に入りに追加しました` : `${n}件をお気に入りから外しました`;
+
+/** 選択モードの削除の確認文（7-3、8）。★ 付きを含むときだけ件数を添える */
+export const bulkDeleteMessage = (n: number, favorites: number): string =>
+  favorites > 0
+    ? `${n}件の単語と学習履歴を削除します。お気に入り${favorites}件を含みます。よろしいですか？`
+    : `${n}件の単語と学習履歴を削除します。よろしいですか？`;
 
 /** スワイプ削除の「元に戻す」を表示する時間 */
 export const UNDO_MS = 5000;
@@ -81,18 +119,29 @@ interface ListState {
   toast?: string;
 }
 
-export function WordList() {
+/**
+ * 単語一覧（7-3）。favorites が true のときは #/favorites の「★ お気に入り」一覧で、
+ * 全フォルダの ★ 付き単語を出し、「＋」と取込を出さず、各行にフォルダ名を小さく添える。
+ */
+export function WordList({ favorites = false }: { favorites?: boolean } = {}) {
   const { folderId = '' } = useParams();
+  /** 学習セッションと並べ替えの対象範囲。お気に入り一覧は 'favorites' */
+  const scope = favorites ? FAVORITES : folderId;
   const navigate = useNavigate();
   const location = useLocation();
   const { data, reload } = useAsync(async () => {
-    const [folder, words, folders] = await Promise.all([getFolder(folderId), listWordsInFolder(folderId), listFolders()]);
+    const [folder, words, folders] = await Promise.all([
+      favorites ? Promise.resolve(undefined) : getFolder(folderId),
+      favorites ? listFavoriteWords() : listWordsInFolder(folderId),
+      listFolders(),
+    ]);
     return { folder, words, folders };
-  }, [folderId]);
+  }, [folderId, favorites]);
   const [query, setQuery] = useState('');
   const [debounced, setDebounced] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
   const [sort, setSort] = useState<SortKey>(DEFAULT_SORT);
+  const [dir, setDir] = useState<SortDir>(DEFAULT_DIR[DEFAULT_SORT]);
   const [sorting, setSorting] = useState(false);
   // 取込の結果（10-3）は単語フォームから location.state で受け取り、この画面で表示する
   const [message, setMessage] = useState<string | null>(() => (location.state as ListState | null)?.message ?? null);
@@ -111,8 +160,11 @@ export function WordList() {
     return () => clearTimeout(t);
   }, [query]);
 
-  // 並べ替えは保存しない。一覧を開くたびに既定（登録日の新しい順）に戻す（7-3）
-  useEffect(() => setSort(DEFAULT_SORT), [folderId]);
+  // 並べ替えの基準も向きも保存しない。一覧を開くたびに既定（登録日の新しい順）に戻す（7-3）
+  useEffect(() => {
+    setSort(DEFAULT_SORT);
+    setDir(DEFAULT_DIR[DEFAULT_SORT]);
+  }, [folderId, favorites]);
 
   /** 画面下に text を 4 秒出す。消すときにそのままなら消し、別の文面に変わっていたら消さない */
   const showToast = useCallback((text: string) => {
@@ -128,8 +180,20 @@ export function WordList() {
     if (s.toast) showToast(s.toast);
   }, [location.state, location.pathname, navigate, showToast]);
 
+  // 一覧から消えた単語は選択から外す（お気に入り一覧で ★ を外したときなど）
+  useEffect(() => {
+    if (!data) return;
+    const ids = new Set(data.words.map((w) => w.id));
+    setSelected((prev) => {
+      const next = new Set([...prev].filter((id) => ids.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [data]);
+
   const words = data?.words ?? [];
-  const otherFolders = useMemo(() => moveTargets(data?.folders ?? [], folderId), [data, folderId]);
+  // お気に入り一覧は特定のフォルダに属さないので、移動先から除くフォルダはない
+  const otherFolders = useMemo(() => moveTargets(data?.folders ?? [], favorites ? '' : folderId), [data, folderId, favorites]);
+  const folderName = useCallback((id: string) => data?.folders.find((f) => f.id === id)?.name ?? '', [data]);
   const byState = useMemo(() => {
     const c: Record<CardState, number> = { 0: 0, 1: 0, 2: 0, 3: 0 };
     for (const w of words) c[w.state] += 1;
@@ -148,8 +212,8 @@ export function WordList() {
     const q = debounced.trim().toLowerCase();
     if (q) list = list.filter((w) => w.englishTerm.toLowerCase().includes(q) || w.japaneseDefinition.toLowerCase().includes(q));
     if (pending) list = list.filter((w) => w.id !== pending.id); // 削除保留中の行は隠す
-    return sortWords(list, sort);
-  }, [words, filter, debounced, now, pending, sort]);
+    return sortWords(list, sort, dir);
+  }, [words, filter, debounced, now, pending, sort, dir]);
 
   const filtering = filter !== 'all' || debounced.trim() !== '';
 
@@ -208,6 +272,24 @@ export function WordList() {
     setSelected(new Set());
   };
 
+  /** 選択中の単語（削除・☆ の判定に使う） */
+  const selectedWords = useMemo(() => words.filter((w) => selected.has(w.id)), [words, selected]);
+  /** 選択中がすべて ★ なら「☆ を外す」、それ以外は「☆ を付ける」（7-3） */
+  const favoriteOn = !(selectedWords.length > 0 && selectedWords.every((w) => w.favorite));
+  const selectedFavorites = selectedWords.filter((w) => w.favorite).length;
+
+  /** 選択中の単語の ☆ をまとめて付け外しする。選択は解除せず、結果をトーストで出す */
+  const bulkFavorite = async () => {
+    const ids = [...selected];
+    try {
+      const n = await setFavorites(ids, favoriteOn);
+      reload();
+      showToast(favoriteMessage(n, favoriteOn));
+    } catch (e) {
+      setMessage(errorMessage(e));
+    }
+  };
+
   const bulkDelete = async () => {
     setConfirmBulk(false);
     const ids = [...selected];
@@ -239,9 +321,14 @@ export function WordList() {
 
   const rowText = (w: Word) => (
     <>
+      {/* 行の一番左。★ 付きだけ小さな ★ を出し、それ以外も同じ幅を空けて文字の位置をそろえる（7-3） */}
+      <span className={`row-star${w.favorite ? ' on' : ''}`} role={w.favorite ? 'img' : undefined} aria-label={w.favorite ? 'お気に入り' : undefined}>
+        {w.favorite ? '★' : ''}
+      </span>
       <span className="row-text">
         <span className="row-title">{w.englishTerm}</span>
         <span className="row-sub">{w.japaneseDefinition}</span>
+        {favorites && <span className="row-folder">{folderName(w.folderId)}</span>}
       </span>
       <span className="row-side">
         <span role="img" aria-label={STATE_NAMES[w.state]}>
@@ -255,7 +342,7 @@ export function WordList() {
   return (
     <div className="screen has-fixed-bottom">
       <Header
-        title={data?.folder?.name ?? ''}
+        title={favorites ? '★ お気に入り' : (data?.folder?.name ?? '')}
         back="/"
         right={
           selecting ? (
@@ -264,9 +351,12 @@ export function WordList() {
             </button>
           ) : (
             <>
-              <button type="button" className="btn-icon" aria-label="単語を追加" onClick={() => navigate(`/folders/${folderId}/words/new`)}>
-                ＋
-              </button>
+              {/* お気に入り一覧には「＋」を置かない（7-3）。取込は単語フォーム（新規）の中だけ */}
+              {!favorites && (
+                <button type="button" className="btn-icon" aria-label="単語を追加" onClick={() => navigate(`/folders/${folderId}/words/new`)}>
+                  ＋
+                </button>
+              )}
               <button type="button" className="btn-text" disabled={words.length === 0} onClick={() => setSelecting(true)}>
                 選択
               </button>
@@ -297,14 +387,18 @@ export function WordList() {
             </button>
           ))}
         </div>
+        <button type="button" className="sort-btn" aria-label={`並べ替え: ${SORT_LABELS[sort]}`} onClick={() => setSorting(true)} data-testid="sort-button">
+          <span aria-hidden="true">⇅</span> {SORT_LABELS[sort]}
+        </button>
+        {/* 向きの切り替え。ワンタップで昇順と降順を入れ替える（7-3） */}
         <button
           type="button"
-          className="sort-btn"
-          aria-label={`並べ替え: ${SORT_LABELS[sort]}`}
-          onClick={() => setSorting(true)}
-          data-testid="sort-button"
+          className="sort-btn sort-dir"
+          aria-label={`並び順: ${SORT_DIR_LABELS[sort][dir]}。押すと逆順`}
+          onClick={() => setDir(flipDir)}
+          data-testid="sort-dir"
         >
-          <span aria-hidden="true">⇅</span> {SORT_SHORT_LABELS[sort]}
+          {DIR_MARKS[dir]}
         </button>
       </div>
 
@@ -317,7 +411,7 @@ export function WordList() {
       <StateBar counts={byState} />
 
       {data && words.length === 0 ? (
-        <EmptyState message="単語がありません。＋で追加するか取込してください" />
+        <EmptyState message={favorites ? 'お気に入りの単語がありません' : '単語がありません。＋で追加するか取込してください'} />
       ) : (
         <ul className="word-list" aria-label="単語一覧">
           {shown.map((w) => (
@@ -356,6 +450,16 @@ export function WordList() {
       <div className="fixed-bottom">
         {selecting ? (
           <div className="btn-row">
+            <button
+              type="button"
+              className="btn-secondary"
+              disabled={selected.size === 0}
+              aria-label={favoriteOn ? 'お気に入りに追加' : 'お気に入りから外す'}
+              onClick={() => void bulkFavorite()}
+              data-testid="bulk-favorite"
+            >
+              ☆
+            </button>
             <button type="button" className="btn-secondary" disabled={selected.size === 0} onClick={() => setMoving(true)} data-testid="bulk-move">
               移動
             </button>
@@ -368,7 +472,7 @@ export function WordList() {
             type="button"
             className="btn-primary"
             disabled={dueCount === 0 && newCount === 0}
-            onClick={() => navigate(`/study/select?scope=${folderId}`)}
+            onClick={() => navigate(`/study/select?scope=${scope}`)}
           >
             {startLabel}
           </button>
@@ -378,7 +482,7 @@ export function WordList() {
       <ConfirmDialog
         open={confirmBulk}
         title="単語を削除"
-        message={`${selected.size}件の単語と学習履歴を削除します。よろしいですか？`}
+        message={bulkDeleteMessage(selected.size, selectedFavorites)}
         confirmLabel="削除"
         danger
         onConfirm={() => void bulkDelete()}
@@ -390,6 +494,8 @@ export function WordList() {
         value={sort}
         onPick={(k) => {
           setSort(k);
+          // 基準を変えたら向きはその基準の既定に戻す（7-3）
+          setDir(DEFAULT_DIR[k]);
           setSorting(false);
         }}
         onCancel={() => setSorting(false)}

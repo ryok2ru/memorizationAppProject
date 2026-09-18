@@ -26,6 +26,7 @@ const existing = (term: string): Word => ({
   englishTerm: term,
   japaneseDefinition: 'x',
   memo: '',
+  favorite: false,
   createdAt: now,
   updatedAt: now,
   ...newCardFields(now),

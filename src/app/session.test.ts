@@ -24,6 +24,7 @@ const mk = (id: string, patch: Partial<Word> = {}): Word => ({
   englishTerm: id,
   japaneseDefinition: id,
   memo: '',
+  favorite: false,
   createdAt: now,
   updatedAt: now,
   ...newCardFields(now),

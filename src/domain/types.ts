@@ -1,6 +1,20 @@
 export type CardState = 0 | 1 | 2 | 3; // New, Learning, Review, Relearning
 export type Grade = 1 | 2 | 3 | 4; // Again, Hard, Good, Easy
 
+/**
+ * 集計・抽出・学習セッションの対象範囲（6-1、7-2）。
+ * 'all' = 全フォルダ、'favorites' = お気に入り（favorite = true）だけ、それ以外はフォルダ id。
+ */
+export type Scope = 'all' | 'favorites' | (string & {});
+
+export const FAVORITES: Scope = 'favorites';
+
+/** scope が指すフォルダ id（全フォルダ・お気に入りなら null） */
+export const scopeFolderId = (scope: Scope): string | null => (scope === 'all' || scope === FAVORITES ? null : scope);
+
+/** scope がお気に入りだけを見るか */
+export const isFavoritesScope = (scope: Scope): boolean => scope === FAVORITES;
+
 export interface Folder {
   id: string;
   name: string;
@@ -27,6 +41,8 @@ export interface Word extends FsrsFields {
   englishTerm: string;
   japaneseDefinition: string;
   memo: string;
+  /** お気に入り（☆）。既定 false（4-3） */
+  favorite: boolean;
   createdAt: number;
   updatedAt: number;
 }
@@ -63,7 +79,7 @@ export interface Settings {
   importDelimiter: ImportDelimiter; // 最後に使った区切り文字
   importHasHeader: boolean; // 最後に使った「1行目は見出し」
   importColumns: ImportColumnRole[]; // 最後に使った列の割り当て（左から）
-  schemaVersion: 1;
+  schemaVersion: 2;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -78,7 +94,7 @@ export const DEFAULT_SETTINGS: Settings = {
   importDelimiter: ',',
   importHasHeader: false,
   importColumns: ['en', 'ja', 'memo'],
-  schemaVersion: 1,
+  schemaVersion: 2,
 };
 
 export const LIMITS = {

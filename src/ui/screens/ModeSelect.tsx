@@ -8,15 +8,19 @@ import { loadOverview, estimateMinutes } from '../../app/stats';
 import { loadSettings } from '../../app/settings';
 import { buildQueue } from '../../app/queue';
 import { createSession, setSession, type StudyMode } from '../../app/session';
+import { isFavoritesScope, scopeFolderId } from '../../domain/types';
 
 export function ModeSelect() {
   const [params] = useSearchParams();
   const scope = params.get('scope') ?? 'all';
-  const folderId = scope === 'all' ? null : scope;
+  const folderId = scopeFolderId(scope);
+  const favorites = isFavoritesScope(scope);
+  /** 戻る先と、キューが空のときの遷移元 */
+  const backTo = favorites ? '/favorites' : folderId ? `/folders/${folderId}` : '/';
   const navigate = useNavigate();
   const { data } = useAsync(async () => {
     const [overview, settings, folder] = await Promise.all([
-      loadOverview(folderId),
+      loadOverview(scope),
       loadSettings(),
       folderId ? getFolder(folderId) : Promise.resolve(undefined),
     ]);
@@ -29,7 +33,7 @@ export function ModeSelect() {
     if (data) setShuffleOn(data.settings.cardOrder === 'random');
   }, [data]);
 
-  if (!data) return <div className="screen"><Header title="" back={folderId ? `/folders/${folderId}` : '/'} /></div>;
+  if (!data) return <div className="screen"><Header title="" back={backTo} /></div>;
 
   const { overview, settings, folder } = data;
   const isReview = overview.due > 0;
@@ -40,15 +44,19 @@ export function ModeSelect() {
     ? isReview || empty
       ? `学習を始める（${name}）`
       : `学習を始める（${name}）— 新しい単語を学習`
-    : isReview || empty
-      ? '全フォルダを復習する'
-      : '全フォルダ — 新しい単語を学習';
+    : favorites
+      ? isReview || empty
+        ? 'お気に入りを復習する'
+        : 'お気に入り — 新しい単語を学習'
+      : isReview || empty
+        ? '全フォルダを復習する'
+        : '全フォルダ — 新しい単語を学習';
 
   const start = async (mode: StudyMode) => {
     if (starting) return;
     setStarting(true);
     try {
-      const q = await buildQueue(folderId, settings.maxCardsPerSession, shuffleOn);
+      const q = await buildQueue(scope, settings.maxCardsPerSession, shuffleOn);
       if (q.ids.length === 0) {
         setStarting(false);
         return;
@@ -63,7 +71,7 @@ export function ModeSelect() {
 
   return (
     <div className="screen">
-      <Header title={title} back={folderId ? `/folders/${folderId}` : '/'} />
+      <Header title={title} back={backTo} />
 
       <div className="card">
         {isReview ? (

@@ -1,13 +1,13 @@
-import type { Grade, Word, ReviewLog, FsrsFields } from '../domain/types';
+import type { Grade, Word, ReviewLog, FsrsFields, Scope } from '../domain/types';
 import { rate as fsrsRate, isFinitePayload, isShortTermState, FSRS_KEYS } from '../domain/fsrs';
 import { saveRating, revertRating } from '../db/repo';
 import type { SessionKind } from './queue';
 
 export type StudyMode = 'flashcard' | 'enToJa' | 'jaToEn';
 
-/** 6-1 の 4 種を scope × kind で表す。scope は 'all' かフォルダ id */
+/** 6-1 の 6 種を scope × kind で表す。scope は 'all'、'favorites'、またはフォルダ id */
 export interface SessionContext {
-  scope: 'all' | string;
+  scope: Scope;
   kind: SessionKind;
 }
 
