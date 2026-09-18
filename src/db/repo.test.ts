@@ -19,6 +19,7 @@ import {
   readSnapshot,
   replaceAll,
   resetProgress,
+  revertRating,
   saveRating,
   saveSettings,
 } from './repo';
@@ -168,5 +169,35 @@ describe('settings and snapshot', () => {
     expect(after.folders).toEqual(snap.folders);
     expect(after.words).toEqual(snap.words);
     expect(after.settings).toEqual(snap.settings);
+  });
+});
+
+describe('revertRating', () => {
+  it('restores the FSRS fields and deletes only the given log in one transaction', async () => {
+    const f = await createFolder('A', now);
+    const w = await createWord({ folderId: f.id, englishTerm: 'a', japaneseDefinition: 'あ', memo: '' }, now);
+    const r1 = rate(w, 3, now);
+    await saveRating(r1.word, r1.log);
+    const r2 = rate(r1.word, 3, now + 600000);
+    await saveRating(r2.word, r2.log);
+    expect((await getWord(w.id))?.state).toBe(2);
+    expect(await db.reviewLogs.count()).toBe(2);
+
+    await revertRating(w.id, r1.word, r2.log.id);
+    const stored = await getWord(w.id);
+    expect(stored?.state).toBe(1);
+    expect(stored?.due).toBe(r1.word.due);
+    expect(stored?.reps).toBe(r1.word.reps);
+    expect(stored?.englishTerm).toBe('a');
+    const logs = await listReviewLogsForWord(w.id);
+    expect(logs.map((l) => l.id)).toEqual([r1.log.id]);
+
+    // 単語が無くても履歴の削除は行われ、エラーにならない
+    await deleteWord(w.id);
+    const orphan = { ...r1.log, id: 'orphan' };
+    await db.reviewLogs.add(orphan);
+    await revertRating(w.id, w, 'orphan');
+    expect(await db.reviewLogs.count()).toBe(0);
+    expect(await getWord(w.id)).toBeUndefined();
   });
 });
