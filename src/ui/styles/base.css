@@ -827,6 +827,15 @@ dialog::backdrop {
   background: rgba(0, 0, 0, 0.4);
 }
 
+/*
+ * 引き下げている間の背景の暗さ（7-9）。--sheet-backdrop は移動量から決めた 0〜1 の倍率で、
+ * useSheetDrag が <dialog> の style に書く。::backdrop が変数を継承しない環境では
+ * 既定値の 1 が使われ、従来どおりの暗さになる
+ */
+dialog.sheet::backdrop {
+  background-color: rgba(0, 0, 0, calc(0.4 * var(--sheet-backdrop, 1)));
+}
+
 /* 開いたときのフォーカスはダイアログ自身に置く（syncModal）。そこに枠は出さない */
 dialog:focus {
   outline: none;
@@ -871,6 +880,28 @@ dialog.sheet[open] {
 
 .sheet h2 {
   margin: 0;
+}
+
+/*
+ * 見出しを引き下げてシートを閉じる領域（7-9）。指で追うので touch-action: none にし、
+ * 引いている間に見出しの文字が選択されないようにする。
+ * 負の margin と同じだけの padding でシート上端の余白まで引っ張れるようにしている（文字の位置は変わらない）
+ */
+.sheet .sheet-handle {
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  margin: -20px -16px 0;
+  padding: 20px 16px 0;
+}
+
+/* 指を離したあとの動き（7-9）。元の位置に戻る／画面下まで滑って閉じる。長さは SHEET_SLIDE_MS と合わせる */
+dialog.sheet.sheet-slide {
+  transition: transform 0.2s ease-out;
+}
+
+dialog.sheet.sheet-slide::backdrop {
+  transition: background-color 0.2s ease-out;
 }
 
 .sheet h3 {

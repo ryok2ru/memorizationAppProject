@@ -9,6 +9,7 @@ import {
   endEarly,
   getSession,
   isFinished,
+  needsQuitSheet,
   rateAndSave,
   remaining,
   setSession,
@@ -141,6 +142,26 @@ export function useStudy(expected: (mode: StudyMode) => boolean) {
     }
   }, [word]);
 
+  /**
+   * ✕ を押したとき（6-3、7-6）。1 件以上評価していれば 3 択のシートを開く。
+   * まだ 1 件も評価していなければシートを出さず、結果画面も出さずにモード選択画面へ戻る。
+   * DB は何も変えていないので書き戻しもバッジ更新もしない
+   */
+  const requestQuit = useCallback(
+    (openSheet: () => void) => {
+      const s = getSession();
+      if (!s || busy) return;
+      if (needsQuitSheet(s)) {
+        openSheet();
+        return;
+      }
+      leaving.current = true;
+      navigate(`/study/select?scope=${s.context.scope}`, { replace: true });
+      setSession(null);
+    },
+    [busy, navigate],
+  );
+
   /** 結果を保存して終了（6-3、7-6）。評価済みの分はすでに保存されているので、結果画面へ移るだけ */
   const quit = useCallback(() => {
     const s = getSession();
@@ -182,6 +203,7 @@ export function useStudy(expected: (mode: StudyMode) => boolean) {
     canUndo: session ? canUndo(session) : false,
     /** 評価が 0 件なら「結果を破棄して終了」は非活性（6-3、7-6） */
     canDiscard: session ? canUndo(session) : false,
+    requestQuit,
     quit,
     discard,
     cardKey,

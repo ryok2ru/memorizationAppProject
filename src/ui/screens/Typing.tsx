@@ -8,8 +8,10 @@ import { checkEn, checkJa, splitCandidates } from '../../domain/normalize';
 import { GRADE_NAMES } from '../../domain/types';
 
 export function Typing() {
-  const { session, word, message, busy, rate, undo, canUndo, favorite, toggleFavorite, quit, discard, canDiscard, remaining, completed } =
-    useStudy((m) => m === 'enToJa' || m === 'jaToEn');
+  const {
+    session, word, message, busy, rate, undo, canUndo, favorite, toggleFavorite,
+    requestQuit, quit, discard, canDiscard, remaining, completed,
+  } = useStudy((m) => m === 'enToJa' || m === 'jaToEn');
   const [input, setInput] = useState('');
   const [judged, setJudged] = useState<'ok' | 'ng' | null>(null);
   const [confirmQuit, setConfirmQuit] = useState(false);
@@ -62,7 +64,12 @@ export function Typing() {
           <>
             {/* ☆ は ✕ の左。表面・裏面のどちらでも押せて、カードの反転や評価には関わらない（7-6） */}
             {word && <FavoriteButton favorite={favorite} onToggle={() => void toggleFavorite()} />}
-            <button type="button" className="btn-icon" aria-label="セッションを終了" onClick={() => setConfirmQuit(true)}>
+            <button
+              type="button"
+              className="btn-icon"
+              aria-label="セッションを終了"
+              onClick={() => requestQuit(() => setConfirmQuit(true))}
+            >
               ✕
             </button>
           </>
