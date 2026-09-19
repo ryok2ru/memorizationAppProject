@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Header } from '../components/Header';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { FavoriteButton } from '../components/FavoriteButton';
 import { ImportScreen } from './Import';
 import { movedMessage } from './WordList';
 import { errorMessage } from '../hooks';
-import { createWord, deleteWord, getWord, listFolders, updateWordText } from '../../db/repo';
+import { createWord, deleteWord, getWord, listFolders, setFavorite, updateWordText } from '../../db/repo';
 import { updateBadge } from '../../app/badge';
 import { importResultMessage, importText, type ImportOptions, type ImportSettings } from '../../app/csv';
 import { loadSettings, requestPersistentStorage, updateSettings } from '../../app/settings';
@@ -20,6 +21,8 @@ export function WordForm() {
   const [initial, setInitial] = useState({ folderId: folderId ?? '', englishTerm: '', japaneseDefinition: '', memo: '' });
   const [form, setForm] = useState(initial);
   const [folders, setFolders] = useState<Folder[]>([]);
+  // ☆ は本文と別に持ち、押した時点で保存する（7-4）。保存ボタンやキャンセルの破棄確認の対象にしない
+  const [favorite, setFavoriteState] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -41,6 +44,7 @@ export function WordForm() {
         const v = { folderId: w.folderId, englishTerm: w.englishTerm, japaneseDefinition: w.japaneseDefinition, memo: w.memo };
         setInitial(v);
         setForm(v);
+        setFavoriteState(w.favorite);
       }
       setLoaded(true);
     });
@@ -78,6 +82,19 @@ export function WordForm() {
       const moved = isEdit && form.folderId !== initial.folderId && dest != null;
       navigate(savedTo, { replace: true, state: moved ? { toast: movedMessage(1, dest.name) } : null });
     } catch (e) {
+      setMessage(errorMessage(e));
+    }
+  };
+
+  /** ☆ の切り替え（編集のみ）。保存ボタンを押さなくてもその場で反映する（7-4） */
+  const onToggleFavorite = async () => {
+    if (!isEdit) return;
+    const next = !favorite;
+    setFavoriteState(next);
+    try {
+      await setFavorite(wordId, next);
+    } catch (e) {
+      setFavoriteState(!next);
       setMessage(errorMessage(e));
     }
   };
@@ -153,6 +170,8 @@ export function WordForm() {
     <div className="screen">
       <Header
         title={isEdit ? '単語を編集' : '単語を追加'}
+        // ☆ は編集のときだけ。新規作成では出さない（7-4）
+        titleRight={isEdit && loaded ? <FavoriteButton favorite={favorite} onToggle={() => void onToggleFavorite()} /> : undefined}
         left={
           <button type="button" className="btn-text" onClick={onCancel}>
             キャンセル

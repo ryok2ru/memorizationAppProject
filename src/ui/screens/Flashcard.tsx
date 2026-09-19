@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ProgressBar } from '../components/ProgressBar';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { FavoriteButton } from '../components/FavoriteButton';
 import { useStudy } from '../useStudy';
 import { preview } from '../../domain/fsrs';
 import { GRADES, GRADE_NAMES, type Grade } from '../../domain/types';
@@ -59,7 +60,7 @@ export function swipeVisual(progress: number): { fillOpacity: number; whiteText:
 }
 
 export function Flashcard() {
-  const { session, word, message, busy, rate, undo, canUndo, quit, cardKey, isRestored, remaining, completed } = useStudy(
+  const { session, word, message, busy, rate, undo, canUndo, favorite, toggleFavorite, quit, cardKey, isRestored, remaining, completed } = useStudy(
     (m) => m === 'flashcard',
   );
   const [flipped, setFlipped] = useState(false);
@@ -199,6 +200,8 @@ export function Flashcard() {
         </div>
         <h1>フラッシュカード</h1>
         <div className="header-side right">
+          {/* ☆ は ✕ の左。表面・裏面のどちらでも押せて、カードの反転や評価には関わらない（7-6） */}
+          {word && <FavoriteButton favorite={favorite} onToggle={() => void toggleFavorite()} />}
           <button type="button" className="btn-icon" aria-label="セッションを終了" onClick={() => setConfirmQuit(true)}>
             ✕
           </button>

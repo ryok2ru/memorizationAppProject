@@ -13,6 +13,7 @@ function makeWord(): Word {
     englishTerm: 'apple',
     japaneseDefinition: 'りんご',
     memo: '',
+    favorite: false,
     createdAt: now,
     updatedAt: now,
     ...newCardFields(now),

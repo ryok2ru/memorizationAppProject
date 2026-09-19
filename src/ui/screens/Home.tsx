@@ -10,21 +10,23 @@ import { InfoSheet } from '../components/InfoSheet';
 import { syncModal } from '../components/modal';
 import { useAsync, isStandalone, errorMessage } from '../hooks';
 import { createFolder, deleteFolder, listAllWords, listFolders, renameFolder } from '../../db/repo';
-import { loadOverview, loadFolderStats, type FolderStats } from '../../app/stats';
+import { loadOverview, loadScopeStats, type ScopeStats } from '../../app/stats';
 import { loadStreak, streakMessage } from '../../app/streak';
 import { loadSettings, requestPersistentStorage } from '../../app/settings';
 import { finishToday, needsRefresh } from '../../app/notify';
 import { updateBadge } from '../../app/badge';
 import { validateFolderName } from '../../domain/validation';
 import { formatShortDateTime } from '../../domain/dates';
-import { LIMITS, type Folder, type Word } from '../../domain/types';
+import { FAVORITES, LIMITS, type Folder, type Word } from '../../domain/types';
 
 /** 検索結果の表示上限。超えた分は絞り込みを促す */
 const MAX_RESULTS = 100;
 
 interface HomeData {
   folders: Folder[];
-  stats: Record<string, FolderStats>;
+  stats: Record<string, ScopeStats>;
+  /** 「★ お気に入り」カードの件数（7-2）。total = ★ の単語数、due = そのうち今日の復習数 */
+  favorites: ScopeStats;
   overview: Awaited<ReturnType<typeof loadOverview>>;
   streak: Awaited<ReturnType<typeof loadStreak>>;
   settings: Awaited<ReturnType<typeof loadSettings>>;
@@ -32,10 +34,16 @@ interface HomeData {
 
 async function loadHome(): Promise<HomeData> {
   const now = Date.now();
-  const [folders, overview, streak, settings] = await Promise.all([listFolders(), loadOverview(null, now), loadStreak(now), loadSettings()]);
-  const stats: Record<string, FolderStats> = {};
-  await Promise.all(folders.map(async (f) => (stats[f.id] = await loadFolderStats(f.id, now))));
-  return { folders, stats, overview, streak, settings };
+  const [folders, favorites, overview, streak, settings] = await Promise.all([
+    listFolders(),
+    loadScopeStats(FAVORITES, now),
+    loadOverview('all', now),
+    loadStreak(now),
+    loadSettings(),
+  ]);
+  const stats: Record<string, ScopeStats> = {};
+  await Promise.all(folders.map(async (f) => (stats[f.id] = await loadScopeStats(f.id, now))));
+  return { folders, stats, favorites, overview, streak, settings };
 }
 
 export function Home() {
@@ -127,19 +135,16 @@ export function Home() {
     <div className="screen">
       <Header
         title="VocaVault"
+        left={
+          /* ⓘ は左上端。歯車より一回り小さい 22px（.btn-icon）で、タップ領域は 44px のまま（7-2） */
+          <button type="button" className="btn-icon" aria-label="状態と評価の説明" onClick={() => setInfo(true)} data-testid="open-info">
+            ⓘ
+          </button>
+        }
         right={
           <>
             <button type="button" className="btn-icon" aria-label="フォルダを追加" onClick={() => setAdding(true)}>
               ＋
-            </button>
-            <button
-              type="button"
-              className="btn-icon btn-icon-lg"
-              aria-label="状態と評価の説明"
-              onClick={() => setInfo(true)}
-              data-testid="open-info"
-            >
-              ⓘ
             </button>
             <Link to="/settings" className="btn btn-icon btn-icon-lg" aria-label="設定">
               ⚙︎
@@ -195,6 +200,14 @@ export function Home() {
                   {results.slice(0, MAX_RESULTS).map((w) => (
                     <li key={w.id} className="word-row">
                       <Link to={`/words/${w.id}`} className="btn word-row-main">
+                        {/* 一覧と同じ ★ の表示（7-2、7-3） */}
+                        <span
+                          className={`row-star${w.favorite ? ' on' : ''}`}
+                          role={w.favorite ? 'img' : undefined}
+                          aria-label={w.favorite ? 'お気に入り' : undefined}
+                        >
+                          {w.favorite ? '★' : ''}
+                        </span>
                         <span className="row-text">
                           <span className="row-title">{w.englishTerm}</span>
                           <span className="row-sub">{w.japaneseDefinition}</span>
@@ -206,10 +219,22 @@ export function Home() {
                 </ul>
               </>
             )
-          ) : data.folders.length === 0 ? (
-            <EmptyState message="フォルダがありません。＋で追加してください" />
           ) : (
             <ul className="folder-list" aria-label="フォルダ一覧">
+              {/* 実体のないフォルダ。常に一番上に出し、「…」メニューは持たない（7-2） */}
+              <li className="folder-card favorites-card" data-testid="favorites-card">
+                <Link to="/favorites" className="btn folder-main">
+                  <span className="folder-icon" aria-hidden="true">
+                    ★
+                  </span>
+                  <span className="row-text">
+                    <span className="row-title">お気に入り</span>
+                    <span className="row-sub">
+                      {data.favorites.total}語 ・ 今日の復習 {data.favorites.due}語
+                    </span>
+                  </span>
+                </Link>
+              </li>
               {data.folders.map((f) => {
                 const s = data.stats[f.id] ?? { total: 0, due: 0 };
                 return (
@@ -233,6 +258,11 @@ export function Home() {
                   </li>
                 );
               })}
+              {data.folders.length === 0 && (
+                <li>
+                  <EmptyState message="フォルダがありません。＋で追加してください" />
+                </li>
+              )}
             </ul>
           )}
 
@@ -326,17 +356,16 @@ function FolderMenu({
       aria-label="フォルダのメニュー"
       data-testid="folder-menu"
     >
-      <h2>{folder?.name}</h2>
-      <div className="menu-list">
-        <button type="button" className="menu-item" onClick={onRename}>
+      {/* 見出しはフォルダ名。その下に区切り線を引き、以下は独立した枠線付きボタンを縦に並べる（7-2） */}
+      <h2 className="menu-title">{folder?.name}</h2>
+      <div className="menu-buttons">
+        <button type="button" className="btn-outline" onClick={onRename}>
           名前を変更
         </button>
-        <button type="button" className="menu-item danger" onClick={onDelete}>
+        <button type="button" className="btn-outline-danger" onClick={onDelete}>
           削除
         </button>
-      </div>
-      <div className="btn-row">
-        <button type="button" className="btn-secondary menu-cancel" onClick={onClose}>
+        <button type="button" className="btn-outline-quiet" onClick={onClose}>
           キャンセル
         </button>
       </div>

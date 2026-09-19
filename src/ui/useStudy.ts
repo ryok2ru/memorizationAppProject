@@ -16,7 +16,7 @@ import {
   undoAndSave,
   type StudyMode,
 } from '../app/session';
-import { getWord } from '../db/repo';
+import { getWord, setFavorite } from '../db/repo';
 import type { Grade, Word } from '../domain/types';
 import { useSession } from './hooks';
 
@@ -117,6 +117,21 @@ export function useStudy(expected: (mode: StudyMode) => boolean) {
     setBusy(false);
   }, [busy]);
 
+  /** ☆ の切り替え（7-6）。表面・裏面のどちらでも押せて、出題やキューには関わらない */
+  const toggleFavorite = useCallback(async () => {
+    if (!word) return;
+    const { id } = word;
+    const next = !word.favorite;
+    setWord((w) => (w && w.id === id ? { ...w, favorite: next } : w));
+    try {
+      await setFavorite(id, next);
+    } catch (e) {
+      console.error('failed to toggle favorite', e);
+      setWord((w) => (w && w.id === id ? { ...w, favorite: !next } : w));
+      setMessage('保存に失敗しました');
+    }
+  }, [word]);
+
   const quit = useCallback(() => {
     const s = getSession();
     if (!s) return;
@@ -131,6 +146,8 @@ export function useStudy(expected: (mode: StudyMode) => boolean) {
     busy,
     rate,
     undo,
+    favorite: word?.favorite ?? false,
+    toggleFavorite,
     canUndo: session ? canUndo(session) : false,
     quit,
     cardKey,

@@ -1,4 +1,4 @@
-import type { Word } from '../domain/types';
+import type { Scope, Word } from '../domain/types';
 import { listDueWords, listNewWords } from '../db/repo';
 
 export type SessionKind = 'review' | 'new';
@@ -40,14 +40,9 @@ export function buildQueueFrom(
   return { kind, ids };
 }
 
-/** folderId が null なら全フォルダ */
-export async function buildQueue(
-  folderId: string | null,
-  maxCards: number,
-  shuffleOn: boolean,
-  now = Date.now(),
-): Promise<QueueResult> {
-  const due = await listDueWords(folderId, now);
-  const news = due.length > 0 ? [] : await listNewWords(folderId, now);
+/** scope は 'all'（全フォルダ）、'favorites'（★ 付きのみ）、またはフォルダ id（6-1） */
+export async function buildQueue(scope: Scope, maxCards: number, shuffleOn: boolean, now = Date.now()): Promise<QueueResult> {
+  const due = await listDueWords(scope, now);
+  const news = due.length > 0 ? [] : await listNewWords(scope, now);
   return buildQueueFrom(due, news, maxCards, shuffleOn);
 }

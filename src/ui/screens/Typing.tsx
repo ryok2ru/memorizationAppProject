@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { ProgressBar } from '../components/ProgressBar';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { FavoriteButton } from '../components/FavoriteButton';
 import { useStudy } from '../useStudy';
 import { checkEn, checkJa, splitCandidates } from '../../domain/normalize';
 import { GRADE_NAMES } from '../../domain/types';
 
 export function Typing() {
-  const { session, word, message, busy, rate, undo, canUndo, quit, remaining, completed } = useStudy(
+  const { session, word, message, busy, rate, undo, canUndo, favorite, toggleFavorite, quit, remaining, completed } = useStudy(
     (m) => m === 'enToJa' || m === 'jaToEn',
   );
   const [input, setInput] = useState('');
@@ -58,6 +59,8 @@ export function Typing() {
         </div>
         <h1>{enToJa ? '英→日 入力' : '日→英 入力'}</h1>
         <div className="header-side right">
+          {/* ☆ は ✕ の左。表面・裏面のどちらでも押せて、カードの反転や評価には関わらない（7-6） */}
+          {word && <FavoriteButton favorite={favorite} onToggle={() => void toggleFavorite()} />}
           <button type="button" className="btn-icon" aria-label="セッションを終了" onClick={() => setConfirmQuit(true)}>
             ✕
           </button>
