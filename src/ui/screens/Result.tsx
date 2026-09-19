@@ -2,22 +2,35 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Header } from '../components/Header';
 import { useAsync, errorMessage } from '../hooks';
-import { getSession, setSession, summarize } from '../../app/session';
+import { getSession, ratedEntries, setSession, summarize } from '../../app/session';
 import { hadStudiedTodayBefore, loadStreak } from '../../app/streak';
 import { loadSettings } from '../../app/settings';
 import { finishToday } from '../../app/notify';
 import { updateBadge } from '../../app/badge';
-import { formatDuration, nextReviewLabel } from '../../domain/dates';
-import { GRADES, GRADE_NAMES } from '../../domain/types';
+import { getWords, setFavorite } from '../../db/repo';
+import { formatDuration, nextReviewLabel, reviewDayLabel } from '../../domain/dates';
+import { GRADES, GRADE_NAMES, type Word } from '../../domain/types';
 
 export function Result() {
   const navigate = useNavigate();
   const [session] = useState(() => getSession());
   const [message, setMessage] = useState<string | null>(null);
+  /** 一覧の ☆ を押した分の上書き。押した時点で保存するので、読み直さずにこの画面だけで表示を切り替える */
+  const [favorites, setFavorites] = useState<Record<string, boolean>>({});
   const { data } = useAsync(async () => {
     if (!session) return null;
-    const [streak, studiedBefore, settings] = await Promise.all([loadStreak(), hadStudiedTodayBefore(session.startedAt), loadSettings()]);
-    return { streak, firstToday: streak.isActiveToday && !studiedBefore, settings };
+    // 評価した単語を出題順に（7-7）。単語の本文は id から読み直す
+    const entries = ratedEntries(session);
+    const [streak, studiedBefore, settings, words] = await Promise.all([
+      loadStreak(),
+      hadStudiedTodayBefore(session.startedAt),
+      loadSettings(),
+      getWords(entries.map((e) => e.wordId)),
+    ]);
+    const rows = entries
+      .map((e) => ({ ...e, word: words.get(e.wordId) }))
+      .filter((r): r is typeof r & { word: Word } => r.word != null);
+    return { streak, firstToday: streak.isActiveToday && !studiedBefore, settings, rows };
   }, [session?.startedAt]);
 
   useEffect(() => {
@@ -34,6 +47,19 @@ export function Result() {
       const { url } = await finishToday();
       window.location.href = url;
     } catch (e) {
+      setMessage(errorMessage(e));
+    }
+  };
+
+  /** 一覧の ☆（7-7）。押すたびに切り替えてその場で保存する */
+  const toggleFavorite = async (word: Word) => {
+    const next = !(favorites[word.id] ?? word.favorite);
+    setFavorites((f) => ({ ...f, [word.id]: next }));
+    try {
+      await setFavorite(word.id, next);
+    } catch (e) {
+      console.error('failed to toggle favorite', e);
+      setFavorites((f) => ({ ...f, [word.id]: !next }));
       setMessage(errorMessage(e));
     }
   };
@@ -93,6 +119,38 @@ export function Result() {
           <div className="value">{summary.earliestDue == null ? '—' : nextReviewLabel(summary.earliestDue, now)}</div>
         </div>
       </div>
+
+      {/* 「次回最も早い復習日」の下。このセッションで評価した単語を出題順に並べる（7-7）。
+          評価が 0 件（途中終了）のときは枠ごと出さない */}
+      {data != null && data.rows.length > 0 && (
+        <div className="stat result-words">
+          <div className="label">評価した単語</div>
+          <ul className="result-word-list" aria-label="評価した単語">
+            {data.rows.map(({ word, grade, due }) => {
+              const on = favorites[word.id] ?? word.favorite;
+              return (
+                <li key={word.id} className="result-word-row">
+                  <button
+                    type="button"
+                    className={`result-star${on ? ' on' : ''}`}
+                    aria-pressed={on}
+                    aria-label={`${word.englishTerm} を${on ? 'お気に入りから外す' : 'お気に入りに追加'}`}
+                    onClick={() => void toggleFavorite(word)}
+                    data-testid={`result-star-${word.id}`}
+                  >
+                    {on ? '★' : '☆'}
+                  </button>
+                  <span className="result-word-en">{word.englishTerm}</span>
+                  <span className="result-word-ja">{word.japaneseDefinition}</span>
+                  {/* 最初に押した評価。再出題分の評価は使わない */}
+                  <span className={`result-word-grade text-grade-${grade}`}>{GRADE_NAMES[grade]}</span>
+                  <span className="result-word-due">{reviewDayLabel(due, now)}</span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
 
       {data?.firstToday && (
         <div className="center" data-testid="streak-result">

@@ -695,7 +695,7 @@ textarea {
   font-weight: 600;
 }
 
-/* swipe to delete (7-3) */
+/* 横スワイプの行 (7-3): 左 = 削除、右 = お気に入りの切り替え */
 .swipe-row {
   position: relative;
   overflow: hidden;
@@ -712,16 +712,26 @@ textarea {
 .swipe-under {
   position: absolute;
   top: 0;
-  right: 0;
   bottom: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--again);
   color: #fff;
 }
 
-.swipe-trash {
+/* 左スワイプ: 右端からゴミ箱 */
+.swipe-under.delete {
+  right: 0;
+  background: var(--again);
+}
+
+/* 右スワイプ: 左端から ☆ / ★（7-3） */
+.swipe-under.favorite {
+  left: 0;
+  background: var(--hard);
+}
+
+.swipe-icon {
   font-size: 22px;
   line-height: 1;
 }
@@ -1122,7 +1132,7 @@ dialog.sheet[open] {
   will-change: transform;
 }
 
-/* 120px 未満で離したとき: 元の位置に戻る */
+/* 確定量（カード幅の 25%）未満で離したとき: 元の位置に戻る */
 .study-card.settle {
   transition: transform 0.2s ease;
 }
@@ -1325,6 +1335,75 @@ dialog.sheet[open] {
 .stat .value {
   font-size: 20px;
   font-weight: 600;
+}
+
+/* 結果画面の「評価した単語」（7-7）。「次回最も早い復習日」の枠の下に置き、行はこの枠の中に並べる */
+.result-words {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.result-word-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 左から ☆・英単語・日本語訳・最初に押した評価・次回の復習。英単語と日本語訳は 1 行に収め、長ければ末尾を省略する */
+.result-word-row {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+}
+
+.result-word-row + .result-word-row {
+  border-top: 1px solid var(--border);
+}
+
+.result-word-en,
+.result-word-ja {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.result-word-en {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.result-word-ja {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+/* 評価は 5-3 の評価色の文字（.text-grade-N） */
+.result-word-grade {
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.result-word-due {
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* 一覧の ☆: 薄いグレー、★ は Hard 色。タップ領域は 44px（button の既定）のまま */
+.result-star {
+  font-size: 18px;
+  color: var(--muted);
+  padding: 0;
+}
+
+.result-star.on {
+  color: var(--hard);
 }
 
 /* update banner */

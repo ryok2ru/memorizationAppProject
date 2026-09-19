@@ -5,8 +5,10 @@ import {
   completed,
   createSession,
   currentWordId,
+  discardAndSave,
   endEarly,
   isFinished,
+  ratedEntries,
   rateAndSave,
   remaining,
   summarize,
@@ -242,5 +244,85 @@ describe('undoAndSave', () => {
     // 空のときは失敗を返し、何もしない
     const u3 = await undoAndSave(s);
     expect(u3).toEqual({ ok: false, reason: 'empty' });
+  });
+});
+
+describe('ratedEntries (7-7)', () => {
+  it('lists the rated words in the order they were shown, with the first rating', () => {
+    let s = createSession(ctx, 'flashcard', ['a', 'b', 'c'], now);
+    s = applyRating(s, mk('a'), 1, mk('a', { state: 1, due: now + 600000 }), logId(), now);
+    s = applyRating(s, mk('b'), 4, mk('b', { state: 2, due: now + 4 * 86400000 }), logId(), now);
+    // 再出題分（a）の評価は firstRating を変えず、due だけが新しくなる
+    s = applyRating(s, mk('c'), 3, mk('c', { state: 2, due: now + 86400000 }), logId(), now);
+    s = applyRating(s, mk('a', { state: 1 }), 3, mk('a', { state: 2, due: now + 2 * 86400000 }), logId(), now);
+    expect(ratedEntries(s)).toEqual([
+      { wordId: 'a', grade: 1, due: now + 2 * 86400000 },
+      { wordId: 'b', grade: 4, due: now + 4 * 86400000 },
+      { wordId: 'c', grade: 3, due: now + 86400000 },
+    ]);
+  });
+
+  it('leaves out words that were not rated', () => {
+    let s = createSession(ctx, 'enToJa', ['a', 'b'], now);
+    s = applyRating(s, mk('b'), 3, mk('b', { state: 2, due: now + 86400000 }), logId(), now);
+    expect(ratedEntries(s).map((e) => e.wordId)).toEqual(['b']);
+    expect(ratedEntries(createSession(ctx, 'enToJa', ['a'], now))).toEqual([]);
+  });
+});
+
+describe('discardAndSave (6-3 の破棄して終了)', () => {
+  beforeEach(async () => {
+    await clearAll();
+  });
+
+  it('puts every rating back to what it was before the session started', async () => {
+    const f = await createFolder('A', now);
+    const a = await createWord({ folderId: f.id, englishTerm: 'a', japaneseDefinition: 'あ', memo: '' }, now);
+    const b = await createWord({ folderId: f.id, englishTerm: 'b', japaneseDefinition: 'い', memo: '' }, now);
+    const start = createSession(ctx, 'flashcard', [a.id, b.id], now);
+    let s = start;
+
+    // a を Again（Learning になって末尾に再出題）、b を Good、再出題の a を Good
+    const r1 = await rateAndSave(a, 1, now);
+    if (!r1.ok) throw new Error('save failed');
+    s = applyRating(s, a, 1, r1.word, r1.log.id, now);
+    const r2 = await rateAndSave(b, 3, now + 1000);
+    if (!r2.ok) throw new Error('save failed');
+    s = applyRating(s, b, 3, r2.word, r2.log.id, now + 1000);
+    const r3 = await rateAndSave(r1.word, 3, now + 2000);
+    if (!r3.ok) throw new Error('save failed');
+    s = applyRating(s, r1.word, 3, r3.word, r3.log.id, now + 2000);
+    expect(s.undo).toHaveLength(3);
+    expect((await listReviewLogsForWord(a.id)).length).toBe(2);
+
+    const d = await discardAndSave(s);
+    expect(d.ok).toBe(true);
+    if (!d.ok) return;
+
+    // DB: FSRS 項目が開始前（New）に戻り、ReviewLog が 1 件も残らない
+    expect(await getWord(a.id)).toMatchObject(newCardFields(now));
+    expect(await getWord(b.id)).toMatchObject(newCardFields(now));
+    expect(await listReviewLogsForWord(a.id)).toHaveLength(0);
+    expect(await listReviewLogsForWord(b.id)).toHaveLength(0);
+    // 単語の本文は変えない
+    expect((await getWord(a.id))?.englishTerm).toBe('a');
+
+    // セッション状態も開始時点に戻る
+    expect(d.state.queue).toEqual([a.id, b.id]);
+    expect(d.state.index).toBe(0);
+    expect(d.state.lastDue).toEqual({});
+    expect(d.state.undo).toEqual([]);
+    expect(canUndo(d.state)).toBe(false);
+    expect(completed(d.state)).toBe(0);
+    expect(summarize(d.state, now).rated).toBe(0);
+    expect(ratedEntries(d.state)).toEqual([]);
+  });
+
+  it('does nothing when there is no rating to discard', async () => {
+    const s = createSession(ctx, 'flashcard', ['a'], now);
+    const d = await discardAndSave(s);
+    expect(d.ok).toBe(true);
+    if (!d.ok) return;
+    expect(d.state).toEqual(s);
   });
 });

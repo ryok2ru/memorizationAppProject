@@ -1,29 +1,34 @@
 import { useRef, useState, type PointerEvent, type ReactNode } from 'react';
 
 interface Props {
-  /** 行幅の 20% 以上スワイプして離したときに呼ぶ */
-  onDelete: () => void;
+  /** 左スワイプ（削除）。省略すると左スワイプは効かない */
+  onDelete?: () => void;
+  /** 右スワイプ（お気に入りの切り替え）。省略すると右スワイプは効かない */
+  onFavorite?: () => void;
+  /** 右スワイプで現れるアイコン。★ 付きの行は ★（外す動作）、そうでなければ ☆（付ける動作） */
+  favorite?: boolean;
   disabled?: boolean;
   children: ReactNode;
 }
 
 /** 横か縦かを決めるまでの移動量 */
 const DECIDE_PX = 10;
-/** 削除が確定する移動量（行幅に対する割合）。未満で離したら元に戻す */
-export const DELETE_RATIO = 0.2;
+/** 確定する移動量（行幅に対する割合）。左（削除）も右（お気に入り）も同じで、未満で離したら元に戻す */
+export const SWIPE_RATIO = 0.2;
 
 type Mode = 'undecided' | 'swipe' | 'scroll';
 
 /**
- * 左スワイプで右端からゴミ箱が現れる行（7-3）。
- * 横方向の移動が縦方向より大きいときだけスワイプとして扱い、縦は touch-action: pan-y でブラウザのスクロールに任せる。
+ * 横スワイプの行（7-3）。左にスワイプすると右端からゴミ箱（削除）、右にスワイプすると左端から ☆ / ★
+ * （お気に入りの切り替え）が移動量に応じて徐々に現れる。
+ * どちらも横方向の移動が縦方向より大きいときだけスワイプとして扱い、縦は touch-action: pan-y でブラウザのスクロールに任せる。
  */
-export function SwipeRow({ onDelete, disabled = false, children }: Props) {
+export function SwipeRow({ onDelete, onFavorite, favorite = false, disabled = false, children }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const gesture = useRef<{ id: number; x: number; y: number; mode: Mode } | null>(null);
   /** 判定できる距離を動かしたか。動かした後の click では行のリンクへ遷移しない */
   const moved = useRef(false);
-  const [offset, setOffset] = useState(0); // 0 以下（左方向）
+  const [offset, setOffset] = useState(0); // 負 = 左（削除）、正 = 右（お気に入り）
   const [animating, setAnimating] = useState(false);
 
   const width = () => Math.max(1, ref.current?.clientWidth ?? 1);
@@ -56,7 +61,8 @@ export function SwipeRow({ onDelete, disabled = false, children }: Props) {
       }
     }
     if (g.mode !== 'swipe') return;
-    setOffset(Math.max(-width(), Math.min(0, dx)));
+    // 効く向きにだけ動かす
+    setOffset(Math.max(onDelete ? -width() : 0, Math.min(onFavorite ? width() : 0, dx)));
   };
 
   const finish = (e: PointerEvent<HTMLDivElement>, cancelled: boolean) => {
@@ -65,16 +71,23 @@ export function SwipeRow({ onDelete, disabled = false, children }: Props) {
     gesture.current = null;
     if (g.mode !== 'swipe') return;
     const dx = e.clientX - g.x;
+    const confirm = width() * SWIPE_RATIO;
     setAnimating(true);
-    if (!cancelled && -dx >= width() * DELETE_RATIO) {
+    if (!cancelled && onDelete && -dx >= confirm) {
       setOffset(-width());
       onDelete();
+    } else if (!cancelled && onFavorite && dx >= confirm) {
+      // 行は一覧に残るので元の位置に戻し、切り替わった ★ だけが見える（確認や「元に戻す」は出さない）
+      setOffset(0);
+      onFavorite();
     } else {
       setOffset(0);
     }
   };
 
-  const reveal = Math.min(1, -offset / (width() * DELETE_RATIO));
+  const confirm = width() * SWIPE_RATIO;
+  const deleteReveal = Math.min(1, Math.max(0, -offset) / confirm);
+  const favoriteReveal = Math.min(1, Math.max(0, offset) / confirm);
 
   return (
     <div
@@ -94,11 +107,20 @@ export function SwipeRow({ onDelete, disabled = false, children }: Props) {
         }
       }}
     >
-      <div className="swipe-under" aria-hidden="true" style={{ opacity: reveal, width: Math.max(56, -offset) }}>
-        <span className="swipe-trash" style={{ transform: `scale(${0.6 + 0.4 * reveal})` }}>
-          🗑
-        </span>
-      </div>
+      {onFavorite && (
+        <div className="swipe-under favorite" aria-hidden="true" style={{ opacity: favoriteReveal, width: Math.max(56, offset) }}>
+          <span className="swipe-icon" style={{ transform: `scale(${0.6 + 0.4 * favoriteReveal})` }}>
+            {favorite ? '★' : '☆'}
+          </span>
+        </div>
+      )}
+      {onDelete && (
+        <div className="swipe-under delete" aria-hidden="true" style={{ opacity: deleteReveal, width: Math.max(56, -offset) }}>
+          <span className="swipe-icon" style={{ transform: `scale(${0.6 + 0.4 * deleteReveal})` }}>
+            🗑
+          </span>
+        </div>
+      )}
       <div className={`swipe-content${animating ? ' animating' : ''}`} style={{ transform: `translateX(${offset}px)` }}>
         {children}
       </div>

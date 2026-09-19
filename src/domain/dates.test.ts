@@ -9,6 +9,7 @@ import {
   nextReviewLabel,
   parseHHMM,
   relativeDueLabel,
+  reviewDayLabel,
   startOfDay,
 } from './dates';
 
@@ -32,6 +33,14 @@ describe('dates', () => {
     expect(dateKey(addDays(now, 1))).toBe('2026-09-19');
     expect(diffDays(addDays(now, 3), now)).toBe(3);
     expect(diffDays(now, addDays(now, 3))).toBe(-3);
+  });
+  it('reviewDayLabel', () => {
+    // 結果画面の一覧（7-7）。評価直後なので今日より前は出ないが、出たときは「今日」にまとめる
+    expect(reviewDayLabel(now, now)).toBe('今日');
+    expect(reviewDayLabel(endOfDay(now), now)).toBe('今日');
+    expect(reviewDayLabel(addDays(now, -1), now)).toBe('今日');
+    expect(reviewDayLabel(addDays(now, 1), now)).toBe('明日');
+    expect(reviewDayLabel(addDays(now, 30), now)).toBe('30日後');
   });
   it('relativeDueLabel', () => {
     expect(relativeDueLabel(now, 0, now)).toBe('未学習');

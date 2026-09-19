@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SWIPE_GUIDES, labelSide, swipeGrade, swipeVisual } from './Flashcard';
+import { CONFIRM_RATIO, FALLBACK_CONFIRM_PX, SWIPE_GUIDES, confirmDistance, labelSide, swipeGrade, swipeVisual } from './Flashcard';
 
 describe('swipeGrade', () => {
   it('maps down = Again, left = Hard, right = Good, up = Easy', () => {
@@ -15,7 +15,7 @@ describe('swipeVisual', () => {
     expect(swipeVisual(0)).toEqual({ fillOpacity: 0, whiteText: false });
     expect(swipeVisual(0.5).fillOpacity).toBeCloseTo(0.425);
     expect(swipeVisual(1)).toEqual({ fillOpacity: 0.85, whiteText: true });
-    // 120px を超えても、負でも範囲内に丸める
+    // 確定量を超えても、負でも範囲内に丸める
     expect(swipeVisual(2).fillOpacity).toBe(0.85);
     expect(swipeVisual(-1).fillOpacity).toBe(0);
   });
@@ -44,5 +44,18 @@ describe('SWIPE_GUIDES', () => {
     expect(bySide.left).toMatchObject({ grade: 2, text: '← Hard' });
     expect(bySide.right).toMatchObject({ grade: 3, text: '→ Good' });
     expect(SWIPE_GUIDES).toHaveLength(4);
+  });
+});
+
+describe('confirmDistance (6-4)', () => {
+  it('confirms at 25% of the card width', () => {
+    expect(CONFIRM_RATIO).toBe(0.25);
+    expect(confirmDistance(342)).toBeCloseTo(85.5); // 390px 幅の画面でおよそ 85px
+    expect(confirmDistance(400)).toBe(100);
+  });
+
+  it('falls back to 85px when the card has not been measured yet', () => {
+    expect(confirmDistance(0)).toBe(FALLBACK_CONFIRM_PX);
+    expect(FALLBACK_CONFIRM_PX).toBe(85);
   });
 });
