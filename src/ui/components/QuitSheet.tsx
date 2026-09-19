@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { syncModal } from './modal';
+import { syncModal, useCloseOnOutside } from './modal';
 
 interface Props {
   open: boolean;
@@ -17,6 +17,7 @@ interface Props {
 export function QuitSheet({ open, canDiscard, onSave, onDiscard, onCancel }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => syncModal(ref.current, open), [open]);
+  const outside = useCloseOnOutside(onCancel);
   return (
     <dialog
       className="sheet"
@@ -26,6 +27,7 @@ export function QuitSheet({ open, canDiscard, onSave, onDiscard, onCancel }: Pro
         e.preventDefault();
         onCancel();
       }}
+      {...outside}
       aria-labelledby="quit-title"
       data-testid="quit-sheet"
     >

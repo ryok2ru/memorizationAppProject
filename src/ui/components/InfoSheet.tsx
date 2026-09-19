@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { syncModal } from './modal';
+import { syncModal, useCloseOnOutside } from './modal';
 import { STATE_ICONS, STATE_NAMES, type CardState, type Grade } from '../../domain/types';
 
 /** 【状態】の文面（設計書 7-9）。アイコンと名前は STATE_ICONS / STATE_NAMES を使う */
@@ -31,6 +31,7 @@ export const INFO_NOTES: string[] = [
 export function InfoSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => syncModal(ref.current, open), [open]);
+  const outside = useCloseOnOutside(onClose);
   return (
     <dialog
       className="sheet"
@@ -40,6 +41,7 @@ export function InfoSheet({ open, onClose }: { open: boolean; onClose: () => voi
         e.preventDefault();
         onClose();
       }}
+      {...outside}
       aria-labelledby="info-title"
       data-testid="info-sheet"
     >

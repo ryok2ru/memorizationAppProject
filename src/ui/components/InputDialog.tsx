@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useCloseOnOutside } from './modal';
 
 interface Props {
   open: boolean;
@@ -13,7 +14,7 @@ interface Props {
   onCancel: () => void;
 }
 
-/** 1 行入力のダイアログ（フォルダ名など） */
+/** 1 行入力のダイアログ（フォルダ名など）。外側タップはキャンセルと同じ（7-9） */
 export function InputDialog({
   open,
   title,
@@ -41,6 +42,8 @@ export function InputDialog({
     } else if (!open && el.open) el.close();
   }, [open, initialValue]);
 
+  const outside = useCloseOnOutside(onCancel);
+
   const error = validate ? validate(value) : value.trim().length === 0 ? '入力してください' : null;
 
   const submit = () => {
@@ -50,7 +53,12 @@ export function InputDialog({
   };
 
   return (
-    <dialog ref={ref} onCancel={(e) => { e.preventDefault(); onCancel(); }} aria-labelledby="input-title">
+    <dialog
+      ref={ref}
+      onCancel={(e) => { e.preventDefault(); onCancel(); }}
+      {...outside}
+      aria-labelledby="input-title"
+    >
       <h2 id="input-title">{title}</h2>
       <form
         onSubmit={(e) => {
