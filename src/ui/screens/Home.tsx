@@ -8,7 +8,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { InputDialog } from '../components/InputDialog';
 import { InfoSheet } from '../components/InfoSheet';
 import { SwipeRow } from '../components/SwipeRow';
-import { syncModal } from '../components/modal';
+import { syncModal, useCloseOnOutside } from '../components/modal';
 import { useAsync, isStandalone, errorMessage } from '../hooks';
 import { createFolder, deleteFolder, listAllWords, listFolders, renameFolder, setFavorite } from '../../db/repo';
 import { loadOverview, loadScopeStats, type ScopeStats } from '../../app/stats';
@@ -363,6 +363,7 @@ function FolderMenu({
   const ref = useRef<HTMLDialogElement>(null);
   const open = folder != null;
   useEffect(() => syncModal(ref.current, open), [open]);
+  const outside = useCloseOnOutside(onClose);
   return (
     <dialog
       ref={ref}
@@ -371,6 +372,7 @@ function FolderMenu({
         e.preventDefault();
         onClose();
       }}
+      {...outside}
       aria-label="フォルダのメニュー"
       data-testid="folder-menu"
     >

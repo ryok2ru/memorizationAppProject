@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { syncModal } from './modal';
+import { syncModal, useCloseOnOutside } from './modal';
 
 interface Props {
   open: boolean;
@@ -12,7 +12,7 @@ interface Props {
   onCancel: () => void;
 }
 
-/** <dialog> を使った確認ダイアログ。フォーカスはダイアログ内に閉じ込められる */
+/** <dialog> を使った確認ダイアログ。フォーカスはダイアログ内に閉じ込められる。外側タップはキャンセルと同じ（7-9） */
 export function ConfirmDialog({
   open,
   title,
@@ -25,8 +25,15 @@ export function ConfirmDialog({
 }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => syncModal(ref.current, open), [open]);
+  const outside = useCloseOnOutside(onCancel);
   return (
-    <dialog ref={ref} tabIndex={-1} onCancel={(e) => { e.preventDefault(); onCancel(); }} aria-labelledby="confirm-title">
+    <dialog
+      ref={ref}
+      tabIndex={-1}
+      onCancel={(e) => { e.preventDefault(); onCancel(); }}
+      {...outside}
+      aria-labelledby="confirm-title"
+    >
       {title && <h2 id="confirm-title">{title}</h2>}
       <p>{message}</p>
       <div className="btn-row">

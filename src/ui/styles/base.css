@@ -110,17 +110,18 @@ body {
   padding: 0;
 }
 
-/* 直径 36px の円。☆ は薄いグレーの円に通常色の ☆。枠線は付けない */
+/* 直径 24px の円に約 16px の星。☆ は薄いグレーの円に通常色の ☆。枠線は付けない。
+   円はボタン（44px）の中央に置くので、上部バーの他のアイコンと縦の中心がそろう */
 .btn-favorite .favorite-circle {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   background: #e5e5ea;
   color: var(--fg);
-  font-size: 20px;
+  font-size: 16px;
   line-height: 1;
 }
 
@@ -639,7 +640,7 @@ textarea {
   min-width: 0;
 }
 
-/* 並べ替え（7-3）: 矢印と基準名を 1 つの枠に収め、中を 2 つのタップ領域に分ける */
+/* 並べ替え（7-3）: 基準名と矢印を 1 つの枠に収め、中を 2 つのタップ領域に分ける（表示例: 登録日↓） */
 .sort-control {
   flex: none;
   display: flex;
@@ -660,14 +661,14 @@ textarea {
   background: var(--border);
 }
 
-/* 左端の矢印（↑ / ↓）。押すと向きだけ切り替わる。タップ領域は 44px */
+/* 右端の矢印（↑ / ↓）。押すと向きだけ切り替わる。タップ領域は 44px */
 .sort-dir {
   flex: none;
   width: 44px;
   font-size: 16px;
 }
 
-/* 基準名。押すと基準を選ぶシートが開く。幅は既定の「登録日」（3 文字）に合わせて固定し、
+/* 左側の基準名。押すと基準を選ぶシートが開く。幅は既定の「登録日」（3 文字）に合わせて固定し、
    基準が変わってもボタンの幅、つまり左隣のフィルターの幅が動かないようにする（7-3） */
 .sort-key {
   flex: none;

@@ -5,7 +5,7 @@ import { StateBar } from '../components/StateBar';
 import { EmptyState } from '../components/EmptyState';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { SwipeRow } from '../components/SwipeRow';
-import { syncModal } from '../components/modal';
+import { syncModal, useCloseOnOutside } from '../components/modal';
 import { useAsync, errorMessage } from '../hooks';
 import {
   deleteWord,
@@ -413,19 +413,9 @@ export function WordList({ favorites = false }: { favorites?: boolean } = {}) {
             </button>
           ))}
         </div>
-        {/* 矢印と基準名を 1 つの枠にまとめたボタン（7-3）。中は 2 つのタップ領域に分かれている */}
+        {/* 基準名と矢印を 1 つの枠にまとめたボタン（7-3）。中は 2 つのタップ領域に分かれている */}
         <div className="sort-control">
-          {/* 左端の矢印。ワンタップで昇順と降順を入れ替える */}
-          <button
-            type="button"
-            className="sort-dir"
-            aria-label={`並び順: ${SORT_DIR_LABELS[sort][dir]}。押すと逆順`}
-            onClick={() => setDir(flipDir)}
-            data-testid="sort-dir"
-          >
-            {DIR_MARKS[dir]}
-          </button>
-          {/* 基準名。押すと基準を選ぶシートを出す */}
+          {/* 左側の基準名。押すと基準を選ぶシートを出す */}
           <button
             type="button"
             className="sort-key"
@@ -434,6 +424,16 @@ export function WordList({ favorites = false }: { favorites?: boolean } = {}) {
             data-testid="sort-button"
           >
             {SORT_SHORT_LABELS[sort]}
+          </button>
+          {/* 右端の矢印。ワンタップで昇順と降順を入れ替える */}
+          <button
+            type="button"
+            className="sort-dir"
+            aria-label={`並び順: ${SORT_DIR_LABELS[sort][dir]}。押すと逆順`}
+            onClick={() => setDir(flipDir)}
+            data-testid="sort-dir"
+          >
+            {DIR_MARKS[dir]}
           </button>
         </div>
       </div>
@@ -563,6 +563,7 @@ function MoveDialog({
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => syncModal(ref.current, open), [open]);
+  const outside = useCloseOnOutside(onCancel);
   return (
     <dialog
       ref={ref}
@@ -571,6 +572,7 @@ function MoveDialog({
         e.preventDefault();
         onCancel();
       }}
+      {...outside}
       aria-labelledby="move-title"
       data-testid="move-dialog"
     >
@@ -609,6 +611,7 @@ function SortSheet({
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => syncModal(ref.current, open), [open]);
+  const outside = useCloseOnOutside(onCancel);
   return (
     <dialog
       className="sheet"
@@ -618,6 +621,7 @@ function SortSheet({
         e.preventDefault();
         onCancel();
       }}
+      {...outside}
       aria-labelledby="sort-title"
       data-testid="sort-sheet"
     >
