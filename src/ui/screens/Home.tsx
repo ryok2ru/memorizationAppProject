@@ -7,9 +7,10 @@ import { EmptyState } from '../components/EmptyState';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { InputDialog } from '../components/InputDialog';
 import { InfoSheet } from '../components/InfoSheet';
+import { SwipeRow } from '../components/SwipeRow';
 import { syncModal } from '../components/modal';
 import { useAsync, isStandalone, errorMessage } from '../hooks';
-import { createFolder, deleteFolder, listAllWords, listFolders, renameFolder } from '../../db/repo';
+import { createFolder, deleteFolder, listAllWords, listFolders, renameFolder, setFavorite } from '../../db/repo';
 import { loadOverview, loadScopeStats, type ScopeStats } from '../../app/stats';
 import { loadStreak, streakMessage } from '../../app/streak';
 import { loadSettings, requestPersistentStorage } from '../../app/settings';
@@ -70,7 +71,10 @@ export function Home() {
 
   // 全フォルダ横断の検索（7-2）。1 文字以上入力したときだけ全単語を読む
   const searching = debounced.trim() !== '';
-  const { data: allWords } = useAsync<Word[] | null>(() => (searching ? listAllWords() : Promise.resolve(null)), [searching, data]);
+  const { data: allWords, reload: reloadWords } = useAsync<Word[] | null>(
+    () => (searching ? listAllWords() : Promise.resolve(null)),
+    [searching, data],
+  );
   const results = useMemo(() => {
     if (!searching || !allWords) return [];
     const q = debounced.trim().toLowerCase();
@@ -79,6 +83,17 @@ export function Home() {
       .sort((a, b) => a.englishTerm.localeCompare(b.englishTerm));
   }, [searching, allWords, debounced]);
   const folderName = (id: string) => data?.folders.find((f) => f.id === id)?.name ?? '';
+
+  /** 検索結果の行の右スワイプでお気に入りを切り替える（7-2、7-3）。★ の件数が変わるのでホームの集計も読み直す */
+  const swipeFavorite = async (word: Word) => {
+    try {
+      await setFavorite(word.id, !word.favorite);
+    } catch (e) {
+      setMessage(errorMessage(e));
+    }
+    reloadWords();
+    reload();
+  };
 
   const existingNames = (except?: string) => (data?.folders ?? []).filter((f) => f.id !== except).map((f) => f.name);
 
@@ -199,21 +214,24 @@ export function Home() {
                 <ul className="word-list" aria-label="検索結果">
                   {results.slice(0, MAX_RESULTS).map((w) => (
                     <li key={w.id} className="word-row">
-                      <Link to={`/words/${w.id}`} className="btn word-row-main">
-                        {/* 一覧と同じ ★ の表示（7-2、7-3） */}
-                        <span
-                          className={`row-star${w.favorite ? ' on' : ''}`}
-                          role={w.favorite ? 'img' : undefined}
-                          aria-label={w.favorite ? 'お気に入り' : undefined}
-                        >
-                          {w.favorite ? '★' : ''}
-                        </span>
-                        <span className="row-text">
-                          <span className="row-title">{w.englishTerm}</span>
-                          <span className="row-sub">{w.japaneseDefinition}</span>
-                        </span>
-                        <span className="row-side">{folderName(w.folderId)}</span>
-                      </Link>
+                      {/* 右スワイプでお気に入りを切り替える。削除は単語一覧だけなので左スワイプは渡さない（7-3） */}
+                      <SwipeRow onFavorite={() => void swipeFavorite(w)} favorite={w.favorite}>
+                        <Link to={`/words/${w.id}`} className="btn word-row-main">
+                          {/* 一覧と同じ ★ の表示（7-2、7-3） */}
+                          <span
+                            className={`row-star${w.favorite ? ' on' : ''}`}
+                            role={w.favorite ? 'img' : undefined}
+                            aria-label={w.favorite ? 'お気に入り' : undefined}
+                          >
+                            {w.favorite ? '★' : ''}
+                          </span>
+                          <span className="row-text">
+                            <span className="row-title">{w.englishTerm}</span>
+                            <span className="row-sub">{w.japaneseDefinition}</span>
+                          </span>
+                          <span className="row-side">{folderName(w.folderId)}</span>
+                        </Link>
+                      </SwipeRow>
                     </li>
                   ))}
                 </ul>

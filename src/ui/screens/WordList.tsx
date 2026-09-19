@@ -15,6 +15,7 @@ import {
   listFolders,
   listWordsInFolder,
   moveWords,
+  setFavorite,
   setFavorites,
 } from '../../db/repo';
 import { updateBadge } from '../../app/badge';
@@ -253,6 +254,19 @@ export function WordList({ favorites = false }: { favorites?: boolean } = {}) {
     setPending(word);
   };
 
+  /**
+   * 右スワイプでお気に入りを切り替える（7-3）。確認も「元に戻す」も出さず、
+   * 読み直した行の左の小さな ★ がそのまま切り替わる。お気に入り一覧では ★ を外した行が一覧から消える
+   */
+  const swipeFavorite = async (word: Word) => {
+    try {
+      await setFavorite(word.id, !word.favorite);
+    } catch (e) {
+      setMessage(errorMessage(e));
+    }
+    reload();
+  };
+
   const undoDelete = () => {
     const p = pendingRef.current;
     if (!p) return;
@@ -444,7 +458,7 @@ export function WordList({ favorites = false }: { favorites?: boolean } = {}) {
                   {rowText(w)}
                 </label>
               ) : (
-                <SwipeRow onDelete={() => swipeDelete(w)}>
+                <SwipeRow onDelete={() => swipeDelete(w)} onFavorite={() => void swipeFavorite(w)} favorite={w.favorite}>
                   <Link to={`/words/${w.id}`} className="btn word-row-main">
                     {rowText(w)}
                   </Link>

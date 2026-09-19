@@ -1,16 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { Header } from '../components/Header';
 import { ProgressBar } from '../components/ProgressBar';
-import { ConfirmDialog } from '../components/ConfirmDialog';
+import { QuitSheet } from '../components/QuitSheet';
 import { FavoriteButton } from '../components/FavoriteButton';
 import { useStudy } from '../useStudy';
 import { checkEn, checkJa, splitCandidates } from '../../domain/normalize';
 import { GRADE_NAMES } from '../../domain/types';
 
 export function Typing() {
-  const { session, word, message, busy, rate, undo, canUndo, favorite, toggleFavorite, quit, remaining, completed } = useStudy(
-    (m) => m === 'enToJa' || m === 'jaToEn',
-  );
+  const { session, word, message, busy, rate, undo, canUndo, favorite, toggleFavorite, quit, discard, canDiscard, remaining, completed } =
+    useStudy((m) => m === 'enToJa' || m === 'jaToEn');
   const [input, setInput] = useState('');
   const [judged, setJudged] = useState<'ok' | 'ng' | null>(null);
   const [confirmQuit, setConfirmQuit] = useState(false);
@@ -160,13 +159,16 @@ export function Typing() {
         </>
       )}
 
-      <ConfirmDialog
+      <QuitSheet
         open={confirmQuit}
-        message="セッションを終了しますか？"
-        confirmLabel="終了"
-        onConfirm={() => {
+        canDiscard={canDiscard}
+        onSave={() => {
           setConfirmQuit(false);
-          void quit();
+          quit();
+        }}
+        onDiscard={() => {
+          setConfirmQuit(false);
+          void discard();
         }}
         onCancel={() => setConfirmQuit(false)}
       />

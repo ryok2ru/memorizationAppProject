@@ -34,14 +34,20 @@ export function diffDays(a: number, b: number): number {
   return Math.round((startOfDay(a) - startOfDay(b)) / DAY_MS);
 }
 
+/** 評価したあとの次回の復習（7-7 の結果画面の一覧）。評価直後なので超過は出ない */
+export function reviewDayLabel(due: number, now: number): string {
+  const d = diffDays(due, now);
+  if (d <= 0) return '今日';
+  if (d === 1) return '明日';
+  return `${d}日後`;
+}
+
 /** 単語一覧の復習予定表示（7-3） */
 export function relativeDueLabel(due: number, state: number, now: number): string {
   if (state === 0) return '未学習';
   const d = diffDays(due, now);
   if (d < 0) return `${-d}日超過`;
-  if (d === 0) return '今日';
-  if (d === 1) return '明日';
-  return `${d}日後`;
+  return reviewDayLabel(due, now);
 }
 
 /** 結果画面の「次回最も早い復習日」表示（6-6） */

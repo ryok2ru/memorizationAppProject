@@ -175,6 +175,22 @@ export async function revertRating(wordId: string, before: FsrsFields, logId: st
   });
 }
 
+/**
+ * 評価の一括取り消し（6-3 の「結果を破棄して終了」）。entries は undo スタックと同じ並び（古い順）で、
+ * 各単語の FSRS 項目をその単語の一番古い `before`（＝セッション開始前の値）に戻し、
+ * 追加した ReviewLog をすべて削除する。**1 トランザクションで行う。**
+ */
+export async function revertRatings(entries: { wordId: string; before: FsrsFields; logId: string }[]): Promise<void> {
+  if (entries.length === 0) return;
+  // 同じ単語が複数回評価されていても、書き戻すのは最初の評価の直前の値だけ
+  const oldest = new Map<string, FsrsFields>();
+  for (const e of entries) if (!oldest.has(e.wordId)) oldest.set(e.wordId, e.before);
+  await db.transaction('rw', db.words, db.reviewLogs, async () => {
+    for (const [wordId, before] of oldest) await db.words.update(wordId, { ...before });
+    await db.reviewLogs.bulkDelete(entries.map((e) => e.logId));
+  });
+}
+
 // ---------- queries ----------
 
 /**

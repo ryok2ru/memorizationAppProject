@@ -5,6 +5,7 @@ import {
   canUndo,
   completed,
   currentWordId,
+  discardAndSave,
   endEarly,
   getSession,
   isFinished,
@@ -17,6 +18,7 @@ import {
   type StudyMode,
 } from '../app/session';
 import { getWord, setFavorite } from '../db/repo';
+import { updateBadge } from '../app/badge';
 import type { Grade, Word } from '../domain/types';
 import { useSession } from './hooks';
 
@@ -35,11 +37,18 @@ export function useStudy(expected: (mode: StudyMode) => boolean) {
    * セッション（外部ストア）の更新と同じ描画で参照できるよう、state ではなく ref に持ち、setSession の前に書く。
    */
   const restoredKey = useRef<string | null>(null);
+  /**
+   * 「結果を破棄して終了」でこの画面を離れている途中か。
+   * HashRouter の遷移は hashchange を待つので、セッションを捨てた直後にこの画面がもう一度描かれる。
+   * その描画で下の useEffect がホームへ戻してしまわないようにする
+   */
+  const leaving = useRef(false);
   const wordId = session ? currentWordId(session) : undefined;
   /** 出題位置の識別子（index と単語 id）。変わるたびに単語を読み直す */
   const cardKey = session ? `${session.index}:${wordId ?? ''}` : '';
 
   useEffect(() => {
+    if (leaving.current) return;
     if (!session || !expected(session.mode)) {
       navigate('/', { replace: true });
       return;
@@ -132,12 +141,34 @@ export function useStudy(expected: (mode: StudyMode) => boolean) {
     }
   }, [word]);
 
+  /** 結果を保存して終了（6-3、7-6）。評価済みの分はすでに保存されているので、結果画面へ移るだけ */
   const quit = useCallback(() => {
     const s = getSession();
     if (!s) return;
     setSession(endEarly(s));
     finish();
   }, [finish]);
+
+  /**
+   * 結果を破棄して終了（6-3、7-6）。このセッションの評価をすべて取り消し、
+   * 結果画面を出さずにモード選択画面へ戻る。バッジも戻した件数で更新する
+   */
+  const discard = useCallback(async () => {
+    const s = getSession();
+    if (!s || busy) return;
+    setBusy(true);
+    setMessage(null);
+    const result = await discardAndSave(s);
+    if (!result.ok) {
+      setMessage(result.reason === 'quota' ? '端末の空き容量が不足しています' : '取り消しに失敗しました');
+      setBusy(false);
+      return;
+    }
+    await updateBadge();
+    leaving.current = true;
+    navigate(`/study/select?scope=${s.context.scope}`, { replace: true });
+    setSession(null);
+  }, [busy, navigate]);
 
   return {
     session,
@@ -149,7 +180,10 @@ export function useStudy(expected: (mode: StudyMode) => boolean) {
     favorite: word?.favorite ?? false,
     toggleFavorite,
     canUndo: session ? canUndo(session) : false,
+    /** 評価が 0 件なら「結果を破棄して終了」は非活性（6-3、7-6） */
+    canDiscard: session ? canUndo(session) : false,
     quit,
+    discard,
     cardKey,
     /** その出題位置が取り消しで戻ったものか。cardKey が変わった後の useEffect から呼ぶ */
     isRestored: (key: string) => restoredKey.current === key,

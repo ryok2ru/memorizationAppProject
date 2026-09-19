@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Header } from '../components/Header';
 import { ProgressBar } from '../components/ProgressBar';
-import { ConfirmDialog } from '../components/ConfirmDialog';
+import { QuitSheet } from '../components/QuitSheet';
 import { FavoriteButton } from '../components/FavoriteButton';
 import { useStudy } from '../useStudy';
 import { preview } from '../../domain/fsrs';
@@ -9,8 +9,10 @@ import { GRADES, GRADE_NAMES, type Grade } from '../../domain/types';
 
 /** 横か縦かを決める移動量 */
 const DECIDE_PX = 10;
-/** 評価が確定する移動量 */
-const CONFIRM_PX = 120;
+/** 評価が確定する移動量（カード幅に対する割合。6-4） */
+export const CONFIRM_RATIO = 0.25;
+/** カード幅が測れないときの確定量。390px 幅の iPhone でのカード幅（342px）の 25% */
+export const FALLBACK_CONFIRM_PX = 85;
 /** 横スワイプの最大の傾き（度） */
 const MAX_TILT_DEG = 8;
 /** 評価色（カードの背景）の最大の不透明度 */
@@ -52,7 +54,7 @@ export function labelSide(grade: Grade): 'top' | 'bottom' {
 }
 
 /**
- * スワイプ中の見た目（6-4）。progress は移動量 ÷ 120px を 0〜1 に丸めたもの。
+ * スワイプ中の見た目（6-4）。progress は移動量 ÷ 確定量（カード幅の 25%）を 0〜1 に丸めたもの。
  * 評価色は文字の下に敷き、不透明度は 0 から 0.85 まで。0.4 を超えたら文字を白にして色の上でも読めるようにする
  */
 export function swipeVisual(progress: number): { fillOpacity: number; whiteText: boolean } {
@@ -60,14 +62,23 @@ export function swipeVisual(progress: number): { fillOpacity: number; whiteText:
   return { fillOpacity: MAX_OPACITY * p, whiteText: p > WHITE_TEXT_AT };
 }
 
+/**
+ * 評価が確定する移動量（6-4）。カード幅の 25%（390px 幅の画面ではおよそ 85px）。
+ * カードがまだ描かれていなくて幅が測れないときは 85px を使う。
+ */
+export function confirmDistance(cardWidth: number): number {
+  return cardWidth > 0 ? cardWidth * CONFIRM_RATIO : FALLBACK_CONFIRM_PX;
+}
+
 export function Flashcard() {
-  const { session, word, message, busy, rate, undo, canUndo, favorite, toggleFavorite, quit, cardKey, isRestored, remaining, completed } = useStudy(
-    (m) => m === 'flashcard',
-  );
+  const { session, word, message, busy, rate, undo, canUndo, favorite, toggleFavorite, quit, discard, canDiscard, cardKey, isRestored, remaining, completed } =
+    useStudy((m) => m === 'flashcard');
   const [flipped, setFlipped] = useState(false);
   const [confirmQuit, setConfirmQuit] = useState(false);
   const [drag, setDrag] = useState<Drag | null>(null);
   const [anim, setAnim] = useState<Anim>('none');
+  /** 確定する移動量。指を置いた時点のカード幅から決める（6-4） */
+  const [confirmPx, setConfirmPx] = useState(FALLBACK_CONFIRM_PX);
   const gesture = useRef<{ id: number; x: number; y: number; axis: Axis | null } | null>(null);
   const cardRef = useRef<HTMLDivElement>(null);
 
@@ -112,6 +123,7 @@ export function Flashcard() {
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (busy || anim === 'leave' || !word) return;
     if (e.pointerType === 'mouse' && e.button !== 0) return;
+    setConfirmPx(confirmDistance(cardRef.current?.clientWidth ?? 0));
     gesture.current = { id: e.pointerId, x: e.clientX, y: e.clientY, axis: null };
     setAnim('none');
     try {
@@ -142,7 +154,7 @@ export function Flashcard() {
       return;
     }
     const d = g.axis === 'x' ? e.clientX - g.x : e.clientY - g.y;
-    if (Math.abs(d) >= CONFIRM_PX) {
+    if (Math.abs(d) >= confirmPx) {
       setDrag({ axis: g.axis, d });
       setAnim('leave');
     } else {
@@ -160,14 +172,14 @@ export function Flashcard() {
 
   if (!session) return null;
 
-  // スワイプ中の見た目: 追従、0〜120px で文字の下の評価色を濃く（文字は薄くしない）、横は最大 8 度傾ける
+  // スワイプ中の見た目: 追従、0 から確定量にかけて文字の下の評価色を濃く（文字は薄くしない）、横は最大 8 度傾ける
   const dragGrade = drag ? swipeGrade(drag.axis, drag.d) : null;
-  const progress = drag ? (anim === 'leave' ? 1 : Math.min(1, Math.abs(drag.d) / CONFIRM_PX)) : 0;
+  const progress = drag ? (anim === 'leave' ? 1 : Math.min(1, Math.abs(drag.d) / confirmPx)) : 0;
   const visual = swipeVisual(progress);
   let transform: string | undefined;
   if (drag) {
     const sign = drag.d > 0 ? 1 : -1;
-    const tilt = drag.axis === 'x' ? MAX_TILT_DEG * Math.max(-1, Math.min(1, drag.d / CONFIRM_PX)) : 0;
+    const tilt = drag.axis === 'x' ? MAX_TILT_DEG * Math.max(-1, Math.min(1, drag.d / confirmPx)) : 0;
     if (anim === 'leave') {
       const far = drag.axis === 'x' ? window.innerWidth + 200 : window.innerHeight + 200;
       transform = drag.axis === 'x' ? `translate(${sign * far}px, 0) rotate(${sign * MAX_TILT_DEG}deg)` : `translate(0, ${sign * far}px)`;
@@ -304,13 +316,16 @@ export function Flashcard() {
         )}
       </div>
 
-      <ConfirmDialog
+      <QuitSheet
         open={confirmQuit}
-        message="セッションを終了しますか？"
-        confirmLabel="終了"
-        onConfirm={() => {
+        canDiscard={canDiscard}
+        onSave={() => {
           setConfirmQuit(false);
-          void quit();
+          quit();
+        }}
+        onDiscard={() => {
+          setConfirmQuit(false);
+          void discard();
         }}
         onCancel={() => setConfirmQuit(false)}
       />

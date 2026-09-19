@@ -1,6 +1,6 @@
 import type { Grade, Word, ReviewLog, FsrsFields, Scope } from '../domain/types';
 import { rate as fsrsRate, isFinitePayload, isShortTermState, FSRS_KEYS } from '../domain/fsrs';
-import { saveRating, revertRating } from '../db/repo';
+import { saveRating, revertRating, revertRatings } from '../db/repo';
 import type { SessionKind } from './queue';
 
 export type StudyMode = 'flashcard' | 'enToJa' | 'jaToEn';
@@ -134,6 +134,17 @@ export function undoLast(s: SessionState): SessionState {
   return { ...rest, queue, items, lastDue, index: entry.index, undo: s.undo.slice(0, -1) };
 }
 
+/**
+ * undo スタックを全件巻き戻した状態（6-3 の「結果を破棄して終了」）。
+ * 末尾から順に `undoLast` を重ねるだけなので、結果はセッション開始時点の状態になる。
+ * DB のほうは `discardAndSave` が 1 トランザクションで戻す。
+ */
+export function undoAll(s: SessionState): SessionState {
+  let next = s;
+  while (next.undo.length > 0) next = undoLast(next);
+  return next;
+}
+
 /** 保存失敗時など、評価を記録せず次に進む */
 export function skipCurrent(s: SessionState, now = Date.now()): SessionState {
   const index = s.index + 1;
@@ -167,6 +178,33 @@ export function summarize(s: SessionState, now = Date.now()): SessionSummary {
     durationMs: (s.finishedAt ?? now) - s.startedAt,
     earliestDue: dues.length === 0 ? null : Math.min(...dues),
   };
+}
+
+/** 結果画面の「評価した単語」の 1 行（7-7） */
+export interface RatedEntry {
+  wordId: string;
+  /** 最初に押した評価。再出題分の評価は使わない */
+  grade: Grade;
+  /** 評価後の due（同じ単語を再出題で評価したときは最後の評価のもの） */
+  due: number;
+}
+
+/**
+ * 評価した単語を出題順（キューに最初に現れた順）に返す（7-7）。
+ * 評価していない単語（未出題、保存に失敗した分、取り消した分）は含まない。
+ */
+export function ratedEntries(s: SessionState): RatedEntry[] {
+  const rows: RatedEntry[] = [];
+  const seen = new Set<string>();
+  for (const wordId of s.queue) {
+    if (seen.has(wordId)) continue;
+    seen.add(wordId);
+    const grade = s.items[wordId]?.firstRating;
+    const due = s.lastDue[wordId];
+    if (grade == null || due == null) continue;
+    rows.push({ wordId, grade, due });
+  }
+  return rows;
 }
 
 export type RateOutcome =
@@ -214,6 +252,29 @@ export async function undoAndSave(s: SessionState): Promise<UndoOutcome> {
     } catch (e) {
       if (isQuotaError(e)) return { ok: false, reason: 'quota' };
       console.error('failed to undo rating', e);
+    }
+  }
+  return { ok: false, reason: 'save' };
+}
+
+export type DiscardOutcome =
+  | { ok: true; state: SessionState }
+  | { ok: false; reason: 'save' | 'quota' };
+
+/**
+ * このセッションで行った評価をすべて取り消す（6-3 の「結果を破棄して終了」）。
+ * undo スタックを全件巻き戻す処理で、単語の FSRS 項目と ReviewLog を **1 トランザクションで** 開始前に戻す。
+ * DB 書き込みが成功したときだけ、開始時点のセッション状態を返す。書き込み失敗は 1 回再試行する。
+ */
+export async function discardAndSave(s: SessionState): Promise<DiscardOutcome> {
+  if (s.undo.length === 0) return { ok: true, state: undoAll(s) };
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      await revertRatings(s.undo);
+      return { ok: true, state: undoAll(s) };
+    } catch (e) {
+      if (isQuotaError(e)) return { ok: false, reason: 'quota' };
+      console.error('failed to discard ratings', e);
     }
   }
   return { ok: false, reason: 'save' };
