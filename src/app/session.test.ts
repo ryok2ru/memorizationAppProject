@@ -8,6 +8,7 @@ import {
   discardAndSave,
   endEarly,
   isFinished,
+  needsQuitSheet,
   ratedEntries,
   rateAndSave,
   remaining,
@@ -324,5 +325,34 @@ describe('discardAndSave (6-3 の破棄して終了)', () => {
     expect(d.ok).toBe(true);
     if (!d.ok) return;
     expect(d.state).toEqual(s);
+  });
+});
+
+describe('ending with no rating (6-3 の ✕)', () => {
+  it('produces no result: the 3-choice sheet is skipped and nothing is summarized', () => {
+    const s = createSession(ctx, 'flashcard', ['a', 'b'], now);
+    // まだ 1 件も評価していないので 3 択のシートは出さず、セッションをそのまま捨てる
+    expect(needsQuitSheet(s)).toBe(false);
+    expect(canUndo(s)).toBe(false);
+    expect(completed(s)).toBe(0);
+    expect(s.finishedAt).toBeUndefined();
+    expect(s.endedEarly).toBe(false);
+    expect(summarize(s, now).rated).toBe(0);
+    expect(ratedEntries(s)).toEqual([]);
+  });
+
+  it('shows the sheet once something has been rated', () => {
+    let s = createSession(ctx, 'flashcard', ['a', 'b'], now);
+    s = applyRating(s, mk('a'), 3, mk('a', { state: 2, due: now + 86400000 }), logId(), now);
+    expect(needsQuitSheet(s)).toBe(true);
+  });
+
+  it('goes back to no result when the only rating is undone', () => {
+    let s = createSession(ctx, 'flashcard', ['a', 'b'], now);
+    s = applyRating(s, mk('a'), 3, mk('a', { state: 2, due: now + 86400000 }), logId(), now);
+    s = undoLast(s);
+    expect(needsQuitSheet(s)).toBe(false);
+    expect(summarize(s, now).rated).toBe(0);
+    expect(ratedEntries(s)).toEqual([]);
   });
 });

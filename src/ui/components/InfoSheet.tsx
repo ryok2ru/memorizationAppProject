@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { syncModal, useCloseOnOutside } from './modal';
+import { useSheetDrag } from './sheetDrag';
 import { STATE_ICONS, STATE_NAMES, type CardState, type Grade } from '../../domain/types';
 
 /** 【状態】の文面（設計書 7-9）。アイコンと名前は STATE_ICONS / STATE_NAMES を使う */
@@ -32,10 +33,13 @@ export function InfoSheet({ open, onClose }: { open: boolean; onClose: () => voi
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => syncModal(ref.current, open), [open]);
   const outside = useCloseOnOutside(onClose);
+  // 見出しを引き下げても閉じる（7-9）。本文は今までどおりスクロールでき、下に引いても閉じない
+  const drag = useSheetDrag(ref, open, onClose);
   return (
     <dialog
-      className="sheet"
+      className={`sheet${drag.sliding ? ' sheet-slide' : ''}`}
       ref={ref}
+      style={drag.style}
       tabIndex={-1}
       onCancel={(e) => {
         e.preventDefault();
@@ -45,7 +49,9 @@ export function InfoSheet({ open, onClose }: { open: boolean; onClose: () => voi
       aria-labelledby="info-title"
       data-testid="info-sheet"
     >
-      <h2 id="info-title">状態と評価の説明</h2>
+      <h2 id="info-title" className="sheet-handle" {...drag.handleProps}>
+        状態と評価の説明
+      </h2>
       <div className="sheet-body">
         <h3>状態</h3>
         <ul className="info-list">

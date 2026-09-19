@@ -6,6 +6,7 @@ import { EmptyState } from '../components/EmptyState';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { SwipeRow } from '../components/SwipeRow';
 import { syncModal, useCloseOnOutside } from '../components/modal';
+import { useSheetDrag } from '../components/sheetDrag';
 import { useAsync, errorMessage } from '../hooks';
 import {
   deleteWord,
@@ -612,10 +613,13 @@ function SortSheet({
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => syncModal(ref.current, open), [open]);
   const outside = useCloseOnOutside(onCancel);
+  // 見出し（「並べ替え」の行）を引き下げても閉じる（7-9）。選択肢の行は今までどおり押せる
+  const drag = useSheetDrag(ref, open, onCancel);
   return (
     <dialog
-      className="sheet"
+      className={`sheet${drag.sliding ? ' sheet-slide' : ''}`}
       ref={ref}
+      style={drag.style}
       tabIndex={-1}
       onCancel={(e) => {
         e.preventDefault();
@@ -625,7 +629,9 @@ function SortSheet({
       aria-labelledby="sort-title"
       data-testid="sort-sheet"
     >
-      <h2 id="sort-title">並べ替え</h2>
+      <h2 id="sort-title" className="sheet-handle" {...drag.handleProps}>
+        並べ替え
+      </h2>
       <div className="menu-list sheet-body">
         {SORT_KEYS.map((k) => (
           <button key={k} type="button" className="menu-item" aria-pressed={value === k} onClick={() => onPick(k)}>

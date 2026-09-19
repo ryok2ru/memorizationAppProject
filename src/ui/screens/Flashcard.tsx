@@ -71,8 +71,10 @@ export function confirmDistance(cardWidth: number): number {
 }
 
 export function Flashcard() {
-  const { session, word, message, busy, rate, undo, canUndo, favorite, toggleFavorite, quit, discard, canDiscard, cardKey, isRestored, remaining, completed } =
-    useStudy((m) => m === 'flashcard');
+  const {
+    session, word, message, busy, rate, undo, canUndo, favorite, toggleFavorite,
+    requestQuit, quit, discard, canDiscard, cardKey, isRestored, remaining, completed,
+  } = useStudy((m) => m === 'flashcard');
   const [flipped, setFlipped] = useState(false);
   const [confirmQuit, setConfirmQuit] = useState(false);
   const [drag, setDrag] = useState<Drag | null>(null);
@@ -216,7 +218,12 @@ export function Flashcard() {
           <>
             {/* ☆ は ✕ の左。表面・裏面のどちらでも押せて、カードの反転や評価には関わらない（7-6） */}
             {word && <FavoriteButton favorite={favorite} onToggle={() => void toggleFavorite()} />}
-            <button type="button" className="btn-icon" aria-label="セッションを終了" onClick={() => setConfirmQuit(true)}>
+            <button
+              type="button"
+              className="btn-icon"
+              aria-label="セッションを終了"
+              onClick={() => requestQuit(() => setConfirmQuit(true))}
+            >
               ✕
             </button>
           </>

@@ -59,6 +59,12 @@ export const remaining = (s: SessionState): number => Math.max(0, s.queue.length
 export const completed = (s: SessionState): number =>
   Object.values(s.items).filter((i) => i.firstRating != null).length;
 export const canUndo = (s: SessionState): boolean => s.undo.length > 0;
+/**
+ * ✕ を押したときに 3 択のシート（7-6）を出すか（6-3）。
+ * このセッションで 1 件も評価していなければ出さず、結果を作らずにモード選択画面へ戻る。
+ * 評価の有無は undo スタックで判る（取り消して 0 件に戻った場合も 0 件として扱う）
+ */
+export const needsQuitSheet = (s: SessionState): boolean => s.undo.length > 0;
 
 export function markShown(s: SessionState, wordId: string): SessionState {
   const item = s.items[wordId] ?? { shownCount: 0 };
