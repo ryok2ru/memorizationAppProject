@@ -6,6 +6,7 @@ import {
   MOVED_MS,
   SORT_KEYS,
   SORT_LABELS,
+  SORT_SHORT_LABELS,
   bulkDeleteMessage,
   favoriteMessage,
   flipDir,
@@ -146,9 +147,17 @@ describe('向きの反転', () => {
 });
 
 describe('並べ替えの名前', () => {
-  it('5 つの基準に基準名だけの名前がある（向きは隣のボタンで示す）', () => {
+  it('シートには 5 つの基準の長い名前を出す', () => {
     expect(SORT_KEYS).toEqual(['created', 'alpha', 'state', 'due', 'favorite']);
     expect(SORT_KEYS.map((k) => SORT_LABELS[k])).toEqual(['登録日', 'アルファベット', '学習状態', '次回の復習日', 'お気に入り']);
+  });
+
+  it('ボタンには短い表示名を出す', () => {
+    expect(SORT_KEYS.map((k) => SORT_SHORT_LABELS[k])).toEqual(['登録日', 'A→Z', '状態', '復習日', '★']);
+  });
+
+  it('短い表示名は幅を固定する既定の「登録日」に収まる長さにする', () => {
+    for (const k of SORT_KEYS) expect(SORT_SHORT_LABELS[k].length).toBeLessThanOrEqual(SORT_SHORT_LABELS.created.length);
   });
 });
 

@@ -35,13 +35,25 @@ export const SORT_KEYS: SortKey[] = ['created', 'alpha', 'state', 'due', 'favori
 
 export const DEFAULT_SORT: SortKey = 'created';
 
-/** シートとボタンに出す名前（基準名のみ。向きは隣のボタンで示す） */
+/** シートに出す名前（7-3）。長いほうの名前はシートの中だけで使う */
 export const SORT_LABELS: Record<SortKey, string> = {
   created: '登録日',
   alpha: 'アルファベット',
   state: '学習状態',
   due: '次回の復習日',
   favorite: 'お気に入り',
+};
+
+/**
+ * ボタンに出す短い表示名（7-3）。ボタンの幅は既定の「↓登録日」で固定するので、
+ * どれも「登録日」の幅に収まる長さにする。
+ */
+export const SORT_SHORT_LABELS: Record<SortKey, string> = {
+  created: '登録日',
+  alpha: 'A→Z',
+  state: '状態',
+  due: '復習日',
+  favorite: '★',
 };
 
 /** 基準を変えたときに戻す向き（7-3）。登録日だけ降順（新しい順）が既定 */
@@ -387,19 +399,29 @@ export function WordList({ favorites = false }: { favorites?: boolean } = {}) {
             </button>
           ))}
         </div>
-        <button type="button" className="sort-btn" aria-label={`並べ替え: ${SORT_LABELS[sort]}`} onClick={() => setSorting(true)} data-testid="sort-button">
-          <span aria-hidden="true">⇅</span> {SORT_LABELS[sort]}
-        </button>
-        {/* 向きの切り替え。ワンタップで昇順と降順を入れ替える（7-3） */}
-        <button
-          type="button"
-          className="sort-btn sort-dir"
-          aria-label={`並び順: ${SORT_DIR_LABELS[sort][dir]}。押すと逆順`}
-          onClick={() => setDir(flipDir)}
-          data-testid="sort-dir"
-        >
-          {DIR_MARKS[dir]}
-        </button>
+        {/* 矢印と基準名を 1 つの枠にまとめたボタン（7-3）。中は 2 つのタップ領域に分かれている */}
+        <div className="sort-control">
+          {/* 左端の矢印。ワンタップで昇順と降順を入れ替える */}
+          <button
+            type="button"
+            className="sort-dir"
+            aria-label={`並び順: ${SORT_DIR_LABELS[sort][dir]}。押すと逆順`}
+            onClick={() => setDir(flipDir)}
+            data-testid="sort-dir"
+          >
+            {DIR_MARKS[dir]}
+          </button>
+          {/* 基準名。押すと基準を選ぶシートを出す */}
+          <button
+            type="button"
+            className="sort-key"
+            aria-label={`並べ替え: ${SORT_LABELS[sort]}`}
+            onClick={() => setSorting(true)}
+            data-testid="sort-button"
+          >
+            {SORT_SHORT_LABELS[sort]}
+          </button>
+        </div>
       </div>
 
       {filtering && (
@@ -448,17 +470,19 @@ export function WordList({ favorites = false }: { favorites?: boolean } = {}) {
       ) : null}
 
       <div className="fixed-bottom">
+        {/* 選択モードの下部は「☆」「移動」「N件を削除」。☆ は「移動」の半分の幅で、残りを 2 つで等分する（7-3） */}
         {selecting ? (
-          <div className="btn-row">
+          <div className="btn-row select-actions">
             <button
               type="button"
-              className="btn-secondary"
+              className="btn-secondary bulk-favorite"
               disabled={selected.size === 0}
               aria-label={favoriteOn ? 'お気に入りに追加' : 'お気に入りから外す'}
               onClick={() => void bulkFavorite()}
               data-testid="bulk-favorite"
             >
-              ☆
+              {/* 選択中がすべて ★ なら ★（外す）、それ以外は ☆（付ける） */}
+              {favoriteOn ? '☆' : '★'}
             </button>
             <button type="button" className="btn-secondary" disabled={selected.size === 0} onClick={() => setMoving(true)} data-testid="bulk-move">
               移動

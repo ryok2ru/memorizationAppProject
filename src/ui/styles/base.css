@@ -54,11 +54,11 @@ body {
 }
 
 /* header */
+/* 全画面共通の上部バー（7-1）: 左の領域・タイトル・右の領域の 3 列 */
 .header {
   display: flex;
   align-items: center;
   min-height: 52px;
-  gap: 8px;
   margin: 0 -16px;
   padding: 0 8px;
   position: sticky;
@@ -67,18 +67,10 @@ body {
   z-index: 5;
 }
 
-/* タイトルと、そのすぐ右に置くもの（単語フォームの ☆。7-4）。タイトルは中央のまま */
-.header-title {
+/* タイトルは残りの幅いっぱいを取り、左右が同じ幅なので常に画面の中央に来る */
+.header h1 {
   flex: 1;
   min-width: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-}
-
-.header h1 {
-  flex: 0 1 auto;
   margin: 0;
   font-size: 18px;
   font-weight: 600;
@@ -88,24 +80,61 @@ body {
   text-overflow: ellipsis;
 }
 
-/* ☆ / ★ のボタン（7-4 の単語フォーム、7-6 の学習画面）。★ は Hard 色で塗る */
-.btn-favorite {
-  flex: none;
-  color: var(--muted);
-}
-
-.btn-favorite.on {
-  color: var(--hard);
-}
-
+/* 左右の領域。片側にしかアイコンが無い画面でも同じ幅を確保する（7-1） */
 .header .header-side {
+  flex: none;
+  width: 96px;
   display: flex;
-  min-width: 88px;
+  align-items: center;
   gap: 4px;
 }
 
 .header .header-side.right {
   justify-content: flex-end;
+}
+
+/* 固定幅なので、中のボタンは縮めず折り返さない */
+.header .header-side > * {
+  flex: none;
+  white-space: nowrap;
+}
+
+/* 一番長い「キャンセル」が 96px に収まるよう、上部バーの文字ボタンだけ左右の余白を詰める */
+.header .btn-text {
+  padding: 0 4px;
+}
+
+/* ☆ / ★ のボタン（7-4 の単語フォーム、7-6 の学習画面）。タップ領域は button の 44px のまま */
+.btn-favorite {
+  flex: none;
+  padding: 0;
+}
+
+/* 直径 36px の円。☆ は薄いグレーの円に通常色の ☆。枠線は付けない */
+.btn-favorite .favorite-circle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #e5e5ea;
+  color: var(--fg);
+  font-size: 20px;
+  line-height: 1;
+}
+
+/* この 2 色は ☆ の円でしか使わないので、配色（7-10）の変数には足さない */
+@media (prefers-color-scheme: dark) {
+  .btn-favorite .favorite-circle {
+    background: #3a3a3c;
+  }
+}
+
+/* ★ は Hard 色で塗った円に白の ★ */
+.btn-favorite.on .favorite-circle {
+  background: var(--hard);
+  color: #fff;
 }
 
 /* buttons */
@@ -234,6 +263,13 @@ button:disabled,
 
 .btn-row > * {
   flex: 1;
+}
+
+/* 選択モードの下部（7-3）: 「☆」は「移動」の半分の幅。残りを「移動」と「N件を削除」で等分する。
+   flex だと左右の余白の分だけ比が狂うので、幅そのものを 1 : 2 : 2 に割り付ける */
+.btn-row.select-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) minmax(0, 2fr);
 }
 
 .fixed-bottom {
@@ -603,26 +639,41 @@ textarea {
   min-width: 0;
 }
 
-.sort-btn {
+/* 並べ替え（7-3）: 矢印と基準名を 1 つの枠に収め、中を 2 つのタップ領域に分ける */
+.sort-control {
   flex: none;
-  min-width: 0;
+  display: flex;
+  align-items: center;
   background: var(--surface);
-  color: var(--accent);
   border-radius: 10px;
-  padding: 0 12px;
-  font-size: 14px;
+  overflow: hidden;
+}
+
+.sort-control > button {
+  min-width: 0;
+  border-radius: 0;
+  color: var(--accent);
   white-space: nowrap;
 }
 
-.sort-btn:active {
+.sort-control > button:active {
   background: var(--border);
 }
 
-/* 並べ替えの右隣の向き（↑ / ↓）。基準名のボタンと同じ見た目で幅だけ詰める */
+/* 左端の矢印（↑ / ↓）。押すと向きだけ切り替わる。タップ領域は 44px */
 .sort-dir {
-  min-width: 44px;
-  padding: 0 8px;
+  flex: none;
+  width: 44px;
   font-size: 16px;
+}
+
+/* 基準名。押すと基準を選ぶシートが開く。幅は既定の「登録日」（3 文字）に合わせて固定し、
+   基準が変わってもボタンの幅、つまり左隣のフィルターの幅が動かないようにする（7-3） */
+.sort-key {
+  flex: none;
+  width: calc(3em + 16px);
+  padding: 0 8px;
+  font-size: 14px;
 }
 
 .segmented {

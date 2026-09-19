@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Header } from '../components/Header';
 import { ProgressBar } from '../components/ProgressBar';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { FavoriteButton } from '../components/FavoriteButton';
@@ -185,8 +186,9 @@ export function Flashcard() {
 
   return (
     <div className="screen study-screen">
-      <header className="header">
-        <div className="header-side">
+      <Header
+        title="フラッシュカード"
+        left={
           <button
             type="button"
             className="btn-icon"
@@ -197,16 +199,17 @@ export function Flashcard() {
           >
             ↶
           </button>
-        </div>
-        <h1>フラッシュカード</h1>
-        <div className="header-side right">
-          {/* ☆ は ✕ の左。表面・裏面のどちらでも押せて、カードの反転や評価には関わらない（7-6） */}
-          {word && <FavoriteButton favorite={favorite} onToggle={() => void toggleFavorite()} />}
-          <button type="button" className="btn-icon" aria-label="セッションを終了" onClick={() => setConfirmQuit(true)}>
-            ✕
-          </button>
-        </div>
-      </header>
+        }
+        right={
+          <>
+            {/* ☆ は ✕ の左。表面・裏面のどちらでも押せて、カードの反転や評価には関わらない（7-6） */}
+            {word && <FavoriteButton favorite={favorite} onToggle={() => void toggleFavorite()} />}
+            <button type="button" className="btn-icon" aria-label="セッションを終了" onClick={() => setConfirmQuit(true)}>
+              ✕
+            </button>
+          </>
+        }
+      />
 
       <ProgressBar remaining={remaining} completed={completed} />
 

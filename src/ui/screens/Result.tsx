@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Header } from '../components/Header';
 import { useAsync, errorMessage } from '../hooks';
 import { getSession, setSession, summarize } from '../../app/session';
 import { hadStudiedTodayBefore, loadStreak } from '../../app/streak';
@@ -48,11 +49,7 @@ export function Result() {
 
   return (
     <div className="screen has-fixed-bottom result-screen">
-      <header className="header">
-        <div className="header-side" />
-        <h1>結果</h1>
-        <div className="header-side right" />
-      </header>
+      <Header title="結果" />
 
       <h2 className="heading" data-testid="result-heading">
         {session.endedEarly ? 'お疲れ様でした' : 'セッション完了！'}
