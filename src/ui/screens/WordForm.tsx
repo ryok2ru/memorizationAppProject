@@ -170,17 +170,19 @@ export function WordForm() {
     <div className="screen">
       <Header
         title={isEdit ? '単語を編集' : '単語を追加'}
-        // ☆ は編集のときだけ。新規作成では出さない（7-4）
-        titleRight={isEdit && loaded ? <FavoriteButton favorite={favorite} onToggle={() => void onToggleFavorite()} /> : undefined}
         left={
           <button type="button" className="btn-text" onClick={onCancel}>
             キャンセル
           </button>
         }
         right={
-          <button type="button" className="btn-text" disabled={!canSave || !loaded} onClick={onSave} style={{ fontWeight: 600 }}>
-            保存
-          </button>
+          <>
+            {/* ☆ はタイトルの右（上部バーの右の領域の先頭）。編集のときだけ出す（7-4） */}
+            {isEdit && loaded && <FavoriteButton favorite={favorite} onToggle={() => void onToggleFavorite()} />}
+            <button type="button" className="btn-text" disabled={!canSave || !loaded} onClick={onSave} style={{ fontWeight: 600 }}>
+              保存
+            </button>
+          </>
         }
       />
 

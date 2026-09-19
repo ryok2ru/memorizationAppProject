@@ -1,22 +1,26 @@
 interface Props {
   favorite: boolean;
   onToggle: () => void;
-  /** 一覧の ★ より大きく出す学習画面・単語フォーム用。押すたびに ☆（空）と ★（塗り）が入れ替わる */
-  className?: string;
 }
 
-/** ☆ の付け外しボタン（7-3、7-4、7-6）。押した時点で保存し、保存ボタンは要らない */
-export function FavoriteButton({ favorite, onToggle, className = '' }: Props) {
+/**
+ * ☆ の付け外しボタン（7-4 の単語フォーム、7-6 の学習画面）。押した時点で保存し、保存ボタンは要らない。
+ * 見た目は直径 36px の円で、☆ は薄いグレーの円に通常色の ☆、★ は Hard 色の円に白の ★。
+ * 円は 36px だがタップ領域は button の 44px のまま。
+ */
+export function FavoriteButton({ favorite, onToggle }: Props) {
   return (
     <button
       type="button"
-      className={`btn-icon btn-favorite${favorite ? ' on' : ''} ${className}`.trim()}
+      className={`btn-favorite${favorite ? ' on' : ''}`}
       aria-pressed={favorite}
       aria-label={favorite ? 'お気に入りから外す' : 'お気に入りに追加'}
       onClick={onToggle}
       data-testid="favorite-toggle"
     >
-      {favorite ? '★' : '☆'}
+      <span className="favorite-circle" aria-hidden="true">
+        {favorite ? '★' : '☆'}
+      </span>
     </button>
   );
 }
