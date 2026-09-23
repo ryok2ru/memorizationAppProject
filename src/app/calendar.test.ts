@@ -3,7 +3,7 @@ import {
   calendarStartLabel,
   calendarStats,
   countDaysInMonth,
-  daySummaryText,
+  formatDayKey,
   isBeforeMonth,
   longestStreak,
   monthGrid,
@@ -53,18 +53,28 @@ describe('表示開始日の反映', () => {
     expect([...summarizeByDay(logs, null).keys()]).toEqual(['2026-09-19', '2026-09-20', '2026-09-21']);
   });
 
-  it('設定されていれば、その日時以降（同時刻を含む）の ReviewLog だけを対象にする', () => {
+  it('設定されていれば、その日の 0:00 以降の ReviewLog だけを対象にする（前日以前は数えない）', () => {
     const days = summarizeByDay(logs, at(2026, 9, 20, 12));
     expect([...days.keys()]).toEqual(['2026-09-20', '2026-09-21']);
-    // 開始日時より前の同じ日の記録（b）は数えない
-    expect(days.get('2026-09-20')?.words).toBe(1);
     expect(summarizeByDay(logs, at(2026, 9, 21, 10)).size).toBe(1);
+    // 0:00 ちょうどは含み、その直前（前日の 23:59）は含まない
+    const edge = [log('a', 3, at(2026, 9, 19, 23, 59)), log('b', 3, at(2026, 9, 20, 0, 0))];
+    expect([...summarizeByDay(edge, at(2026, 9, 20, 18)).keys()]).toEqual(['2026-09-20']);
+  });
+
+  it('朝に学習してから昼にリセットしても、その日の朝の学習は数える', () => {
+    // 9:00 と 15:00 の学習があり、12:00 にリセットした
+    const days = summarizeByDay(logs, at(2026, 9, 20, 12));
+    expect(days.get('2026-09-20')?.words).toBe(2);
+    // リセットした日だけを学習した場合も、その日が塗られる
+    expect([...summarizeByDay([log('a', 1, at(2026, 9, 23, 8))], at(2026, 9, 23, 12)).keys()]).toEqual(['2026-09-23']);
   });
 
   it('3 つの数字も表示開始日以降だけで数える', () => {
     const now = at(2026, 9, 23);
     expect(calendarStats(summarizeByDay(logs, null), now)).toEqual({ thisMonth: 3, longest: 3, total: 3 });
     expect(calendarStats(summarizeByDay(logs, at(2026, 9, 20, 12)), now)).toEqual({ thisMonth: 2, longest: 2, total: 2 });
+    expect(calendarStats(summarizeByDay(logs, at(2026, 9, 21, 23)), now)).toEqual({ thisMonth: 1, longest: 1, total: 1 });
     expect(calendarStats(summarizeByDay(logs, at(2026, 9, 22)), now)).toEqual({ thisMonth: 0, longest: 0, total: 0 });
   });
 
@@ -126,14 +136,10 @@ describe('月の扱い（月またぎ）', () => {
   });
 });
 
-describe('daySummaryText（タップした日の内訳）', () => {
-  it('学習した日は単語数と評価の内訳', () => {
-    expect(daySummaryText('2026-09-05', { words: 12, ratings: { 1: 2, 2: 1, 3: 8, 4: 1 } })).toBe(
-      '9月5日: 12語を学習（Again 2 / Hard 1 / Good 8 / Easy 1）',
-    );
-  });
-
-  it('学習していない日', () => {
-    expect(daySummaryText('2026-10-01', undefined)).toBe('10月1日: 学習の記録はありません');
+describe('formatDayKey（学習記録の見出しの日付）', () => {
+  it('「M月D日」で、月と日の先頭に 0 を付けない', () => {
+    expect(formatDayKey('2026-09-05')).toBe('9月5日');
+    expect(formatDayKey('2026-10-01')).toBe('10月1日');
+    expect(formatDayKey('2026-12-31')).toBe('12月31日');
   });
 });

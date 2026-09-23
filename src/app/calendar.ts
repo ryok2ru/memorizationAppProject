@@ -1,11 +1,11 @@
-import { GRADES, GRADE_NAMES, type Grade, type ReviewLog } from '../domain/types';
-import { addDays, dateKey } from '../domain/dates';
+import type { Grade, ReviewLog } from '../domain/types';
+import { addDays, dateKey, startOfDay } from '../domain/dates';
 import { listReviewLogs } from '../db/repo';
 import { loadSettings } from './settings';
 
 /**
  * 学習カレンダー（7-11）の集計。ReviewLog を一度読み込み、review をローカル日付に変換して日付ごとにまとめる。
- * 進捗リセットの有無は見ない（リセット前の日も学習日）。表示開始日（Settings.calendarStartDate）だけで絞る。
+ * 進捗リセットの有無は見ない（リセット前の日も学習日）。表示開始日（Settings.calendarStartDate）の日の 0:00 以降だけで絞る。
  * ストリーク（6-7、streak.ts）とは別の集計で、互いに影響しない。
  */
 
@@ -27,11 +27,13 @@ export interface YearMonth {
 type LogLike = Pick<ReviewLog, 'wordId' | 'rating' | 'review'>;
 
 /**
- * 日付ごとに集計する。startDate が数値ならその日時以降（review >= startDate）の ReviewLog だけを対象にする。
+ * 日付ごとに集計する。startDate が数値ならその日の 0:00 以降（review >= startOfDay(startDate)）の ReviewLog だけを対象にする。
+ * 押した時刻ではなく日で区切るので、朝に学習してから昼にリセットしても、その日の学習は表示に残る。
  * 同じ日に同じ単語を複数回評価した場合（再出題）は、その日の最初の評価だけを数える（6-6 の結果画面と同じ考え方）。
  */
 export function summarizeByDay(logs: readonly LogLike[], startDate: number | null): CalendarDays {
-  const sorted = logs.filter((l) => startDate == null || l.review >= startDate).sort((a, b) => a.review - b.review);
+  const from = startDate == null ? null : startOfDay(startDate);
+  const sorted = logs.filter((l) => from == null || l.review >= from).sort((a, b) => a.review - b.review);
   const days: CalendarDays = new Map();
   const seen = new Map<string, Set<string>>();
   for (const log of sorted) {
@@ -135,13 +137,6 @@ export function monthGrid({ year, month }: YearMonth): (string | null)[][] {
 export function formatDayKey(key: string): string {
   const [, m, d] = key.split('-').map(Number);
   return `${m}月${d}日`;
-}
-
-/** タップした日の内訳の 1 行（7-11） */
-export function daySummaryText(key: string, day: DaySummary | undefined): string {
-  if (!day) return `${formatDayKey(key)}: 学習の記録はありません`;
-  const parts = GRADES.map((g) => `${GRADE_NAMES[g]} ${day.ratings[g]}`).join(' / ');
-  return `${formatDayKey(key)}: ${day.words}語を学習（${parts}）`;
 }
 
 /** 設定画面の表示（7-8）: 「M月D日以降を表示中」 */
