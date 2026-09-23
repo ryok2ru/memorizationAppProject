@@ -1541,32 +1541,107 @@ h2.heading {
 
 /* 日付のマス。幅は 7 等分で、高さはタップ領域の 44px を確保する */
 .cal-day {
+  position: relative;
   min-width: 0;
   min-height: 44px;
   border-radius: 10px;
   font-variant-numeric: tabular-nums;
 }
 
-/* 学習した日は強調色で塗る。学習量による濃淡は付けない */
+/* 学習した日は学習日の色（--studied）で塗る。学習量による濃淡は付けない */
 .cal-day.studied {
-  background: var(--accent);
+  background: var(--studied);
   color: #fff;
   font-weight: 600;
 }
 
 /* 今日は枠で囲む。塗っていない日は文字色（--fg）の枠。
-   塗った日は --fg の枠だと強調色と見分けにくいので、強調色の縁の内側に背景色（--bg）の枠を入れる */
+   塗った日は --fg の枠だと塗りと見分けにくいので、塗りの縁の内側に背景色（--bg）の枠を入れる */
 .cal-day.today {
   box-shadow: inset 0 0 0 2px var(--fg);
 }
 
 .cal-day.studied.today {
-  box-shadow: inset 0 0 0 2px var(--accent), inset 0 0 0 4px var(--bg);
+  box-shadow: inset 0 0 0 2px var(--studied), inset 0 0 0 4px var(--bg);
 }
 
-.cal-detail {
+/* 選択中の日は、マスの外側（マスの間の 4px の隙間）に強調色の枠を描く。
+   塗りの上に重ねないので、塗った日でも塗っていない日でも同じように見え、今日の内側の枠とも重ならない */
+.cal-day[aria-pressed='true']::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border: 2px solid var(--accent);
+  border-radius: 12px;
+  pointer-events: none;
+}
+
+/* カレンダーと学習記録のカードの間は 12px */
+.cal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* タップした日の学習記録。カレンダー（背景 --bg）と区別できるよう、面の色（--surface）に枠線と角丸を付ける */
+.cal-record {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+/* 1 行目: 日付の見出しと、右端に語数 */
+.cal-record-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.cal-record-head h3 {
   margin: 0;
-  text-align: center;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.cal-record-words {
+  font-size: 22px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 2 行目: Again / Hard / Good / Easy を等間隔の 4 列に並べる。上に件数（評価色）、下にラベル */
+.cal-record-grades {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.cal-record-grade {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.cal-record-count {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+.cal-record-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.cal-record-empty {
+  margin: 0;
+  color: var(--muted);
 }
 
 /* 設定のデータ（7-8）: カレンダーの表示リセットの下に「M月D日以降を表示中」と「全期間に戻す」を横に並べる */
