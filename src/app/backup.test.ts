@@ -65,6 +65,20 @@ describe('backup', () => {
     expect(parseBackup(JSON.stringify(kept)).words[0].favorite).toBe(true);
   });
 
+  it('calendarStartDate は書き出しと読み込みで保たれ、無いファイルは null として読む（10-2）', async () => {
+    const start = new Date(2026, 8, 10, 15, 0).getTime();
+    await saveSettings({ calendarStartDate: start });
+    const { text } = await exportBackup(now);
+    expect(parseBackup(text).settings.calendarStartDate).toBe(start);
+
+    const old = JSON.parse(text);
+    delete old.settings.calendarStartDate;
+    expect(parseBackup(JSON.stringify(old)).settings.calendarStartDate).toBeNull();
+    // settings 自体が無いファイルも null
+    delete old.settings;
+    expect(parseBackup(JSON.stringify(old)).settings.calendarStartDate).toBeNull();
+  });
+
   it('rejects wrong app or schemaVersion or invalid JSON', () => {
     expect(() => parseBackup('{')).toThrow(BackupFormatError);
     expect(() => parseBackup(JSON.stringify({ app: 'Other', schemaVersion: 2, folders: [], words: [], reviewLogs: [] }))).toThrow(

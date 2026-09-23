@@ -45,3 +45,23 @@ db.version(3).stores({
   reviewLogs: 'id, wordId, review',
   settings: 'id',
 });
+
+/**
+ * v4: Settings に calendarStartDate（カレンダーの表示開始日時。7-11）を足す（4-5、4-7）。
+ * 既存レコードには null（全期間）を入れる。インデックスは v3 と同じ。
+ */
+db.version(4)
+  .stores({
+    folders: 'id, sortOrder',
+    words: 'id, folderId, due, state, [folderId+due], [folderId+state]',
+    reviewLogs: 'id, wordId, review',
+    settings: 'id',
+  })
+  .upgrade((tx) =>
+    tx
+      .table('settings')
+      .toCollection()
+      .modify((s: { calendarStartDate?: number | null }) => {
+        s.calendarStartDate = null;
+      }),
+  );

@@ -80,6 +80,11 @@ body {
   text-overflow: ellipsis;
 }
 
+/* タイトルの無いホーム（7-2）では、タイトルの代わりに空の領域が残りの幅を取り、左右の領域を両端に置く */
+.header .header-fill {
+  flex: 1;
+}
+
 /* 左右の領域。片側にしかアイコンが無い画面でも同じ幅を確保する（7-1） */
 .header .header-side {
   flex: none;
@@ -1489,4 +1494,86 @@ h2.heading {
   margin: 0;
   font-size: 22px;
   text-align: center;
+}
+
+/* 学習カレンダー（7-11） */
+/* 3 つの数字は 1 行に並べる。見出し（最長 7 文字）が 390px 幅で折り返さないよう左右の余白を詰めて中央にそろえる */
+.cal-stats {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.cal-stats .stat {
+  padding: 12px 6px;
+  text-align: center;
+}
+
+/* 月の見出しと前月・翌月のボタン */
+.cal-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.cal-nav h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.cal-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* 日曜始まりの 7 列 */
+.cal-row {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.cal-weekday {
+  text-align: center;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* 日付のマス。幅は 7 等分で、高さはタップ領域の 44px を確保する */
+.cal-day {
+  min-width: 0;
+  min-height: 44px;
+  border-radius: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 学習した日は強調色で塗る。学習量による濃淡は付けない */
+.cal-day.studied {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+/* 今日は枠で囲む。塗っていない日は文字色（--fg）の枠。
+   塗った日は --fg の枠だと強調色と見分けにくいので、強調色の縁の内側に背景色（--bg）の枠を入れる */
+.cal-day.today {
+  box-shadow: inset 0 0 0 2px var(--fg);
+}
+
+.cal-day.studied.today {
+  box-shadow: inset 0 0 0 2px var(--accent), inset 0 0 0 4px var(--bg);
+}
+
+.cal-detail {
+  margin: 0;
+  text-align: center;
+}
+
+/* 設定のデータ（7-8）: カレンダーの表示リセットの下に「M月D日以降を表示中」と「全期間に戻す」を横に並べる */
+.calendar-start {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin-top: -8px;
 }

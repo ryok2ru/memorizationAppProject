@@ -59,7 +59,9 @@ export function parseBackup(text: string): Backup {
     throw new BackupFormatError();
   }
   if (!Array.isArray(b.folders) || !Array.isArray(b.words) || !Array.isArray(b.reviewLogs)) throw new BackupFormatError();
-  const settings: Settings = { ...DEFAULT_SETTINGS, ...(b.settings ?? {}), id: 'app', schemaVersion: BACKUP_SCHEMA_VERSION };
+  const merged: Settings = { ...DEFAULT_SETTINGS, ...(b.settings ?? {}), id: 'app', schemaVersion: BACKUP_SCHEMA_VERSION };
+  // calendarStartDate が無い（または数値でない）ファイルは null（全期間）として読む（4-5、10-2）
+  const settings: Settings = { ...merged, calendarStartDate: typeof merged.calendarStartDate === 'number' ? merged.calendarStartDate : null };
   return {
     app: 'VocaVault',
     schemaVersion: BACKUP_SCHEMA_VERSION,

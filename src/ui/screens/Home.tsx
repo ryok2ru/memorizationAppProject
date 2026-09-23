@@ -148,13 +148,19 @@ export function Home() {
 
   return (
     <div className="screen">
+      {/* ホームだけタイトルを出さない。左に ⓘ とカレンダー、右に ＋ と歯車（7-2） */}
       <Header
-        title="VocaVault"
         left={
-          /* ⓘ は左上端。歯車より一回り小さい 22px（.btn-icon）で、タップ領域は 44px のまま（7-2） */
-          <button type="button" className="btn-icon" aria-label="状態と評価の説明" onClick={() => setInfo(true)} data-testid="open-info">
-            ⓘ
-          </button>
+          <>
+            {/* ⓘ は左上端。歯車より一回り小さい 22px（.btn-icon）で、タップ領域は 44px のまま（7-2） */}
+            <button type="button" className="btn-icon" aria-label="状態と評価の説明" onClick={() => setInfo(true)} data-testid="open-info">
+              ⓘ
+            </button>
+            {/* カレンダーは ⓘ と同じ 22px（7-11） */}
+            <Link to="/calendar" className="btn btn-icon" aria-label="学習カレンダー" data-testid="open-calendar">
+              <CalendarIcon />
+            </Link>
+          </>
         }
         right={
           <>
@@ -390,5 +396,15 @@ function FolderMenu({
         </button>
       </div>
     </dialog>
+  );
+}
+
+/** カレンダーのアイコン。文字の ⓘ と同じ 22px の正方形に、文字色（--accent）の線で描く */
+function CalendarIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+      <rect x="3" y="5" width="18" height="16" rx="2.5" />
+      <path d="M3 10h18M8 3v4M16 3v4" />
+    </svg>
   );
 }
