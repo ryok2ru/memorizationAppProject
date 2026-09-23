@@ -10,6 +10,7 @@ import { Flashcard } from './ui/screens/Flashcard';
 import { Typing } from './ui/screens/Typing';
 import { Result } from './ui/screens/Result';
 import { Settings } from './ui/screens/Settings';
+import { Calendar } from './ui/screens/Calendar';
 
 export default function App() {
   const {
@@ -39,6 +40,7 @@ export default function App() {
             <Route path="/study/typing" element={<Typing />} />
             <Route path="/study/result" element={<Result />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/calendar" element={<Calendar />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </div>

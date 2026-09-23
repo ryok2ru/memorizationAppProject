@@ -10,6 +10,7 @@ import { listFolders, resetProgress } from '../../db/repo';
 import { loadSettings, updateSettings, MAX_CARDS_OPTIONS } from '../../app/settings';
 import { exportBackup, importBackup, parseBackup, saveBackupFile, BackupFormatError, type Backup } from '../../app/backup';
 import { updateBadge } from '../../app/badge';
+import { calendarStartLabel } from '../../app/calendar';
 import { formatShortDateTime } from '../../domain/dates';
 import type { Settings as SettingsType } from '../../domain/types';
 
@@ -40,6 +41,7 @@ export function Settings() {
   const [pendingBackup, setPendingBackup] = useState<Backup | null>(null);
   const [resetTarget, setResetTarget] = useState<string>('all');
   const [confirmReset, setConfirmReset] = useState(false);
+  const [confirmCalendarReset, setConfirmCalendarReset] = useState(false);
   const [info, setInfo] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -95,6 +97,12 @@ export function Settings() {
     } catch (e) {
       setMessage(errorMessage(e));
     }
+  };
+
+  /** カレンダーの表示リセット（7-8、7-11）。ReviewLog は消さず、表示開始日時に現在時刻を入れるだけ */
+  const onCalendarReset = async () => {
+    setConfirmCalendarReset(false);
+    await save({ calendarStartDate: Date.now() });
   };
 
   if (!data) return <div className="screen"><Header title="設定" back="/" /></div>;
@@ -232,6 +240,17 @@ export function Settings() {
           <button type="button" className="btn-outline-danger" onClick={() => setConfirmReset(true)} data-testid="reset-progress">
             進捗をリセット
           </button>
+          <button type="button" className="btn-outline-danger" onClick={() => setConfirmCalendarReset(true)} data-testid="reset-calendar">
+            カレンダーの表示をリセット
+          </button>
+          {s.calendarStartDate != null && (
+            <div className="calendar-start" data-testid="calendar-start">
+              <span className="small muted">{calendarStartLabel(s.calendarStartDate)}</span>
+              <button type="button" className="btn-text small" onClick={() => void save({ calendarStartDate: null })} data-testid="calendar-all">
+                全期間に戻す
+              </button>
+            </div>
+          )}
         </div>
       </section>
 
@@ -278,6 +297,15 @@ export function Settings() {
         danger
         onConfirm={onReset}
         onCancel={() => setConfirmReset(false)}
+      />
+      <ConfirmDialog
+        open={confirmCalendarReset}
+        title="カレンダーの表示をリセット"
+        message="カレンダーの表示をリセットしますか？これまでの学習記録は残りますが、カレンダーには今日以降の学習だけが表示されます。"
+        confirmLabel="リセット"
+        danger
+        onConfirm={() => void onCalendarReset()}
+        onCancel={() => setConfirmCalendarReset(false)}
       />
     </div>
   );

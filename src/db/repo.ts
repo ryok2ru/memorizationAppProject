@@ -257,6 +257,11 @@ export async function listReviewTimes(): Promise<number[]> {
   return db.reviewLogs.orderBy('review').keys() as Promise<number[]>;
 }
 
+/** 全 ReviewLog を評価日時の昇順で返す（7-11 のカレンダーの集計） */
+export async function listReviewLogs(): Promise<ReviewLog[]> {
+  return db.reviewLogs.orderBy('review').toArray();
+}
+
 export async function listReviewLogsForWord(wordId: string): Promise<ReviewLog[]> {
   return db.reviewLogs.where('wordId').equals(wordId).toArray();
 }

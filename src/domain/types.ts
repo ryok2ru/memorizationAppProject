@@ -79,6 +79,7 @@ export interface Settings {
   importDelimiter: ImportDelimiter; // 最後に使った区切り文字
   importHasHeader: boolean; // 最後に使った「1行目は見出し」
   importColumns: ImportColumnRole[]; // 最後に使った列の割り当て（左から）
+  calendarStartDate: number | null; // カレンダーの表示開始日時（7-11）。null なら全期間
   schemaVersion: 2;
 }
 
@@ -94,6 +95,7 @@ export const DEFAULT_SETTINGS: Settings = {
   importDelimiter: ',',
   importHasHeader: false,
   importColumns: ['en', 'ja', 'memo'],
+  calendarStartDate: null,
   schemaVersion: 2,
 };
 

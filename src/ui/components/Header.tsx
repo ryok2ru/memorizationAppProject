@@ -2,7 +2,8 @@ import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 interface Props {
-  title: string;
+  /** 省略するとタイトルを出さない（ホームだけ。7-2）。左右の領域の幅と位置は変わらない */
+  title?: string;
   /** 戻る先。未指定なら戻るボタンなし。'back' なら履歴を戻る */
   back?: string | 'back';
   right?: ReactNode;
@@ -31,7 +32,7 @@ export function Header({ title, back, right, left }: Props) {
         )}
         {left}
       </div>
-      <h1>{title}</h1>
+      {title ? <h1>{title}</h1> : <div className="header-fill" />}
       <div className="header-side right">{right}</div>
     </header>
   );
