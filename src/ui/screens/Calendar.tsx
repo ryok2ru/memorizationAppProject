@@ -115,7 +115,7 @@ function DayRecord({ dayKey, day }: { dayKey: string; day: DaySummary | undefine
     <section className="cal-record" role="status" data-testid="cal-detail">
       <div className="cal-record-head">
         <h3>{formatDayKey(dayKey)}</h3>
-        {day && <span className="cal-record-words">{day.words}語</span>}
+        {day && <span className="cal-record-words">{day.words}枚</span>}
       </div>
       {day ? (
         <div className="cal-record-grades">

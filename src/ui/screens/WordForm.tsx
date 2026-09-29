@@ -12,6 +12,7 @@ import { importResultMessage, importText, type ImportOptions, type ImportSetting
 import { loadSettings, requestPersistentStorage, updateSettings } from '../../app/settings';
 import { isWordValid, trimWord, validateWord } from '../../domain/validation';
 import { LIMITS, type Folder } from '../../domain/types';
+import { folderLabels } from '../../domain/labels';
 
 export function WordForm() {
   const { folderId, wordId } = useParams();
@@ -53,7 +54,9 @@ export function WordForm() {
     };
   }, [isEdit, wordId, navigate]);
 
-  const errors = validateWord(form);
+  // 入力欄の見出しは選んでいるフォルダの項目名。フォルダを変えるとその場で切り替わる（7-4）
+  const labels = folderLabels(folders.find((f) => f.id === form.folderId));
+  const errors = validateWord(form, labels);
   const canSave = isWordValid(form);
   const dirty =
     form.folderId !== initial.folderId ||
@@ -151,6 +154,7 @@ export function WordForm() {
         fileName={importFile.name}
         text={importFile.text}
         saved={importFile.saved}
+        labels={labels}
         busy={importing}
         onImport={(o) => void onImport(o)}
         onCancel={() => setImportFile(null)}
@@ -169,7 +173,7 @@ export function WordForm() {
   return (
     <div className="screen">
       <Header
-        title={isEdit ? '単語を編集' : '単語を追加'}
+        title={isEdit ? 'カードを編集' : 'カードを追加'}
         left={
           <button type="button" className="btn-text" onClick={onCancel}>
             キャンセル
@@ -210,10 +214,9 @@ export function WordForm() {
           </select>
         </label>
         <label className="field">
-          <span>英単語（必須）</span>
+          <span>{labels.front}（必須）</span>
           <input
             type="text"
-            lang="en"
             autoCapitalize="off"
             autoCorrect="off"
             spellCheck={false}
@@ -224,11 +227,10 @@ export function WordForm() {
           {showError('englishTerm')}
         </label>
         <label className="field">
-          <span>日本語訳（必須）</span>
+          <span>{labels.back}（必須）</span>
           <input
             type="text"
-            lang="ja"
-            placeholder="例: 曖昧な,あいまいな（カンマ区切りで複数可）"
+            placeholder="カンマ区切りで複数の答えを書けます"
             value={form.japaneseDefinition}
             onChange={(e) => setForm({ ...form, japaneseDefinition: e.target.value })}
             aria-invalid={!!errors.japaneseDefinition}
@@ -246,7 +248,7 @@ export function WordForm() {
         {!isEdit && (
           <>
             <button type="button" className="link-muted" onClick={() => fileRef.current?.click()} data-testid="import-link">
-              複数の単語をまとめて登録する（CSV / TSV 取込）
+              複数のカードをまとめて登録する（CSV / TSV 取込）
             </button>
             <input
               ref={fileRef}
@@ -266,7 +268,7 @@ export function WordForm() {
 
       {isEdit && (
         <button type="button" className="btn-danger" onClick={() => setConfirmDelete(true)}>
-          この単語を削除
+          このカードを削除
         </button>
       )}
 
@@ -283,8 +285,8 @@ export function WordForm() {
       />
       <ConfirmDialog
         open={confirmDelete}
-        title="単語を削除"
-        message="この単語と学習履歴を削除します。よろしいですか？"
+        title="カードを削除"
+        message="このカードと学習履歴を削除します。よろしいですか？"
         confirmLabel="削除"
         danger
         onConfirm={onDelete}

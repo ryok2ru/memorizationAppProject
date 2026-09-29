@@ -3,23 +3,26 @@ import { Header } from '../components/Header';
 import { Switch } from '../components/Switch';
 import {
   DELIMITER_OPTIONS,
-  ROLE_OPTIONS,
   columnCount,
   fitColumns,
   hasEnAndJa,
   initialColumns,
   initialOptions,
   parseDelimited,
+  roleOptions,
   stripBom,
   type ImportOptions,
   type ImportSettings,
 } from '../../app/csv';
 import type { ImportColumnRole, ImportDelimiter } from '../../domain/types';
+import type { Labels } from '../../domain/labels';
 
 interface Props {
   fileName: string;
   text: string;
   saved: ImportSettings;
+  /** 取込先フォルダの項目名。列の割り当ての表示と見出しの判定に使う */
+  labels: Labels;
   busy: boolean;
   onImport: (options: ImportOptions) => void;
   onCancel: () => void;
@@ -32,10 +35,10 @@ const DELIMITER_KEYS: Record<ImportDelimiter, string> = { ',': 'comma', '\t': 't
 const keyToDelimiter = (key: string): ImportDelimiter =>
   (Object.keys(DELIMITER_KEYS) as ImportDelimiter[]).find((d) => DELIMITER_KEYS[d] === key) ?? ',';
 
-/** CSV / TSV 取込画面（10-3）。ファイルを選んだ後に単語一覧の代わりに表示する */
-export function ImportScreen({ fileName, text, saved, busy, onImport, onCancel }: Props) {
+/** CSV / TSV 取込画面（10-3）。ファイルを選んだ後に単語フォームの代わりに表示する */
+export function ImportScreen({ fileName, text, saved, labels, busy, onImport, onCancel }: Props) {
   const body = useMemo(() => stripBom(text), [text]);
-  const [options, setOptions] = useState<ImportOptions>(() => initialOptions(text, saved));
+  const [options, setOptions] = useState<ImportOptions>(() => initialOptions(text, saved, labels));
   const records = useMemo(() => parseDelimited(body, options.delimiter), [body, options.delimiter]);
   const count = columnCount(records);
   const columns = fitColumns(options.columns, count);
@@ -44,10 +47,10 @@ export function ImportScreen({ fileName, text, saved, busy, onImport, onCancel }
 
   const setDelimiter = (delimiter: ImportDelimiter) => {
     const recs = parseDelimited(body, delimiter);
-    setOptions((o) => ({ ...o, delimiter, columns: initialColumns(recs, o.hasHeader, saved.importColumns) }));
+    setOptions((o) => ({ ...o, delimiter, columns: initialColumns(recs, o.hasHeader, saved.importColumns, labels) }));
   };
   const setHasHeader = (hasHeader: boolean) =>
-    setOptions((o) => ({ ...o, hasHeader, columns: initialColumns(records, hasHeader, saved.importColumns) }));
+    setOptions((o) => ({ ...o, hasHeader, columns: initialColumns(records, hasHeader, saved.importColumns, labels) }));
   /** 同じ役割（使わない以外）は 1 列だけ。他の列に付いていれば「使わない」に戻す */
   const setRole = (index: number, role: ImportColumnRole) =>
     setOptions((o) => ({
@@ -87,7 +90,7 @@ export function ImportScreen({ fileName, text, saved, busy, onImport, onCancel }
                       onChange={(e) => setRole(i, e.target.value as ImportColumnRole)}
                       data-testid={`column-${i}`}
                     >
-                      {ROLE_OPTIONS.map((o) => (
+                      {roleOptions(labels).map((o) => (
                         <option key={o.value} value={o.value}>
                           {o.label}
                         </option>
@@ -129,7 +132,7 @@ export function ImportScreen({ fileName, text, saved, busy, onImport, onCancel }
 
       {!valid && records.length > 0 && (
         <p className="small muted center" style={{ margin: 0 }}>
-          英単語と日本語訳の列を1つずつ選んでください
+          {labels.front}と{labels.back}の列を1つずつ選んでください
         </p>
       )}
 

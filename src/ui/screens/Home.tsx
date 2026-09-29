@@ -5,12 +5,12 @@ import { SummaryCard } from '../components/SummaryCard';
 import { StateBar } from '../components/StateBar';
 import { EmptyState } from '../components/EmptyState';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { InputDialog } from '../components/InputDialog';
+import { FolderDialog, type FolderDialogValue } from '../components/FolderDialog';
 import { InfoSheet } from '../components/InfoSheet';
 import { SwipeRow } from '../components/SwipeRow';
 import { syncModal, useCloseOnOutside } from '../components/modal';
 import { useAsync, isStandalone, errorMessage } from '../hooks';
-import { createFolder, deleteFolder, listAllWords, listFolders, renameFolder, setFavorite } from '../../db/repo';
+import { createFolder, deleteFolder, listAllWords, listFolders, setFavorite, updateFolder } from '../../db/repo';
 import { loadOverview, loadScopeStats, type ScopeStats } from '../../app/stats';
 import { loadStreak, streakMessage } from '../../app/streak';
 import { loadSettings, requestPersistentStorage } from '../../app/settings';
@@ -18,7 +18,8 @@ import { finishToday, needsRefresh } from '../../app/notify';
 import { updateBadge } from '../../app/badge';
 import { validateFolderName } from '../../domain/validation';
 import { formatShortDateTime } from '../../domain/dates';
-import { FAVORITES, LIMITS, type Folder, type Word } from '../../domain/types';
+import { FAVORITES, type Folder, type Word } from '../../domain/types';
+import { folderLabels } from '../../domain/labels';
 
 /** 検索結果の表示上限。超えた分は絞り込みを促す */
 const MAX_RESULTS = 100;
@@ -52,7 +53,7 @@ export function Home() {
   const { data, reload } = useAsync(loadHome, []);
   const [adding, setAdding] = useState(false);
   const [menuFolder, setMenuFolder] = useState<Folder | null>(null);
-  const [renaming, setRenaming] = useState<Folder | null>(null);
+  const [editing, setEditing] = useState<Folder | null>(null);
   const [deleting, setDeleting] = useState<Folder | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [info, setInfo] = useState(false);
@@ -97,23 +98,23 @@ export function Home() {
 
   const existingNames = (except?: string) => (data?.folders ?? []).filter((f) => f.id !== except).map((f) => f.name);
 
-  const onAdd = async (name: string) => {
+  const onAdd = async ({ name, labels }: FolderDialogValue) => {
     setAdding(false);
     requestPersistentStorage();
     try {
-      await createFolder(name);
+      await createFolder(name, Date.now(), labels);
       reload();
     } catch (e) {
       setMessage(errorMessage(e));
     }
   };
 
-  const onRename = async (name: string) => {
-    if (!renaming) return;
-    const id = renaming.id;
-    setRenaming(null);
+  const onEdit = async ({ name, labels }: FolderDialogValue) => {
+    if (!editing) return;
+    const id = editing.id;
+    setEditing(null);
     try {
-      await renameFolder(id, name);
+      await updateFolder(id, name, labels);
       reload();
     } catch (e) {
       setMessage(errorMessage(e));
@@ -188,7 +189,7 @@ export function Home() {
 
       <input
         type="search"
-        placeholder="全フォルダから検索（英語・日本語訳）"
+        placeholder="全フォルダから検索"
         aria-label="全フォルダから検索"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
@@ -211,7 +212,7 @@ export function Home() {
 
           {searching ? (
             allWords == null ? null : results.length === 0 ? (
-              <EmptyState message="該当する単語がありません" />
+              <EmptyState message="該当するカードがありません" />
             ) : (
               <>
                 <div className="small muted center" data-testid="search-count">
@@ -254,7 +255,7 @@ export function Home() {
                   <span className="row-text">
                     <span className="row-title">お気に入り</span>
                     <span className="row-sub">
-                      {data.favorites.total}語 ・ 今日の復習 {data.favorites.due}語
+                      {data.favorites.total}枚 ・ 今日の復習 {data.favorites.due}枚
                     </span>
                   </span>
                 </Link>
@@ -270,7 +271,7 @@ export function Home() {
                       <span className="row-text">
                         <span className="row-title">{f.name}</span>
                         <span className="row-sub">
-                          {s.total}語 ・ 今日の復習 {s.due}語
+                          {s.total}枚 ・ 今日の復習 {s.due}枚
                         </span>
                       </span>
                     </Link>
@@ -306,32 +307,29 @@ export function Home() {
         </>
       )}
 
-      <InputDialog
+      <FolderDialog
         open={adding}
         title="フォルダを追加"
-        placeholder="フォルダ名"
-        maxLength={LIMITS.folderName}
         confirmLabel="追加"
-        validate={(v) => validateFolderName(v, existingNames())}
-        onConfirm={onAdd}
+        validateName={(v) => validateFolderName(v, existingNames())}
+        onConfirm={(v) => void onAdd(v)}
         onCancel={() => setAdding(false)}
       />
 
-      <InputDialog
-        open={renaming != null}
-        title="フォルダ名を変更"
-        initialValue={renaming?.name ?? ''}
-        maxLength={LIMITS.folderName}
-        validate={(v) => validateFolderName(v, existingNames(renaming?.id))}
-        onConfirm={onRename}
-        onCancel={() => setRenaming(null)}
+      <FolderDialog
+        open={editing != null}
+        title="フォルダを編集"
+        initial={editing ? { name: editing.name, labels: folderLabels(editing) } : undefined}
+        validateName={(v) => validateFolderName(v, existingNames(editing?.id))}
+        onConfirm={(v) => void onEdit(v)}
+        onCancel={() => setEditing(null)}
       />
 
       <FolderMenu
         folder={menuFolder}
         onClose={() => setMenuFolder(null)}
-        onRename={() => {
-          setRenaming(menuFolder);
+        onEdit={() => {
+          setEditing(menuFolder);
           setMenuFolder(null);
         }}
         onDelete={() => {
@@ -345,7 +343,7 @@ export function Home() {
       <ConfirmDialog
         open={deleting != null}
         title="フォルダを削除"
-        message={`「${deleting?.name ?? ''}」と配下の単語、学習履歴をすべて削除します。よろしいですか？`}
+        message={`「${deleting?.name ?? ''}」と配下のカード、学習履歴をすべて削除します。よろしいですか？`}
         confirmLabel="削除"
         danger
         onConfirm={onDelete}
@@ -358,12 +356,12 @@ export function Home() {
 function FolderMenu({
   folder,
   onClose,
-  onRename,
+  onEdit,
   onDelete,
 }: {
   folder: Folder | null;
   onClose: () => void;
-  onRename: () => void;
+  onEdit: () => void;
   onDelete: () => void;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
@@ -385,8 +383,8 @@ function FolderMenu({
       {/* 見出しはフォルダ名。その下に区切り線を引き、以下は独立した枠線付きボタンを縦に並べる（7-2） */}
       <h2 className="menu-title">{folder?.name}</h2>
       <div className="menu-buttons">
-        <button type="button" className="btn-outline" onClick={onRename}>
-          名前を変更
+        <button type="button" className="btn-outline" onClick={onEdit}>
+          フォルダを編集
         </button>
         <button type="button" className="btn-outline-danger" onClick={onDelete}>
           削除

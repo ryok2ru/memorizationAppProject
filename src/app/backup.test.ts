@@ -65,6 +65,25 @@ describe('backup', () => {
     expect(parseBackup(JSON.stringify(kept)).words[0].favorite).toBe(true);
   });
 
+  it('項目名が無いフォルダは英単語・日本語訳として読み、あればそのまま（4-2、10-2）', () => {
+    const file = {
+      app: 'VocaVault',
+      schemaVersion: 2,
+      exportedAt: now,
+      folders: [
+        { id: 'f', name: 'A', createdAt: now, sortOrder: 0 },
+        { id: 'g', name: 'B', createdAt: now, sortOrder: 1, frontLabel: '用語', backLabel: '説明' },
+      ],
+      words: [],
+      reviewLogs: [],
+    };
+    const parsed = parseBackup(JSON.stringify(file));
+    expect(parsed.folders.map((f) => [f.frontLabel, f.backLabel])).toEqual([
+      ['英単語', '日本語訳'],
+      ['用語', '説明'],
+    ]);
+  });
+
   it('calendarStartDate は書き出しと読み込みで保たれ、無いファイルは null として読む（10-2）', async () => {
     const start = new Date(2026, 8, 10, 15, 0).getTime();
     await saveSettings({ calendarStartDate: start });

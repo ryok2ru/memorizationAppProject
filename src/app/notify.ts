@@ -34,7 +34,7 @@ export function buildNotifyPayload(words: Word[], settings: Settings, now: numbe
     if (n === 0) continue;
     items.push({
       at: formatNotifyAt(at),
-      title: d === 1 ? `今日は${n}語の復習があります` : `復習が溜まっています。今日は${n}語`,
+      title: d === 1 ? `今日は${n}枚の復習があります` : `復習が溜まっています。今日は${n}枚`,
     });
   }
   return { v: 1, list: 'VocaVault', items };

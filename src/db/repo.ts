@@ -3,6 +3,7 @@ import { db } from './db';
 import type { Folder, Word, ReviewLog, Settings, CardState, FsrsFields, Scope } from '../domain/types';
 import { DEFAULT_SETTINGS, isFavoritesScope, scopeFolderId } from '../domain/types';
 import { newCardFields, FSRS_KEYS } from '../domain/fsrs';
+import { DEFAULT_LABELS, type Labels } from '../domain/labels';
 import { endOfDay } from '../domain/dates';
 
 const uuid = () => crypto.randomUUID();
@@ -28,12 +29,15 @@ export async function getFolder(id: string): Promise<Folder | undefined> {
   return db.folders.get(id);
 }
 
-export async function createFolder(name: string, now = Date.now()): Promise<Folder> {
+/** フォルダを作る。項目名を省略すると「表」「裏」（4-2） */
+export async function createFolder(name: string, now = Date.now(), labels: Labels = DEFAULT_LABELS): Promise<Folder> {
   return db.transaction('rw', db.folders, async () => {
     const last = await db.folders.orderBy('sortOrder').last();
     const folder: Folder = {
       id: uuid(),
       name: name.trim(),
+      frontLabel: labels.front.trim(),
+      backLabel: labels.back.trim(),
       createdAt: now,
       sortOrder: last ? last.sortOrder + 1 : 0,
     };
@@ -42,8 +46,9 @@ export async function createFolder(name: string, now = Date.now()): Promise<Fold
   });
 }
 
-export async function renameFolder(id: string, name: string): Promise<void> {
-  await db.folders.update(id, { name: name.trim() });
+/** フォルダ名と項目名を更新する（7-2 の「フォルダを編集」）。配下の単語は変えない */
+export async function updateFolder(id: string, name: string, labels: Labels): Promise<void> {
+  await db.folders.update(id, { name: name.trim(), frontLabel: labels.front.trim(), backLabel: labels.back.trim() });
 }
 
 /** フォルダと配下の単語、その履歴を削除 */

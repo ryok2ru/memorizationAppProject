@@ -16,7 +16,7 @@ import {
 } from './WordList';
 import type { CardState, Folder, Word } from '../../domain/types';
 
-const folder = (id: string, name: string): Folder => ({ id, name, createdAt: 0, sortOrder: 0 });
+const folder = (id: string, name: string): Folder => ({ id, name, frontLabel: '表', backLabel: '裏', createdAt: 0, sortOrder: 0 });
 
 describe('moveTargets', () => {
   const folders = [folder('a', 'A'), folder('b', 'B'), folder('c', 'C')];
@@ -168,7 +168,7 @@ describe('選択モードの文面', () => {
   });
 
   it('削除の確認は ★ 付きを含むときだけ件数を添える', () => {
-    expect(bulkDeleteMessage(2, 0)).toBe('2件の単語と学習履歴を削除します。よろしいですか？');
-    expect(bulkDeleteMessage(5, 2)).toBe('5件の単語と学習履歴を削除します。お気に入り2件を含みます。よろしいですか？');
+    expect(bulkDeleteMessage(2, 0)).toBe('2件のカードと学習履歴を削除します。よろしいですか？');
+    expect(bulkDeleteMessage(5, 2)).toBe('5件のカードと学習履歴を削除します。お気に入り2件を含みます。よろしいですか？');
   });
 });

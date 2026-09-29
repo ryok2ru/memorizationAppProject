@@ -16,7 +16,7 @@ export function SummaryCard({ due, news, onStartReview, onStartNew }: Props) {
     return (
       <section className="card summary-card" data-testid="summary-card" aria-label="今日の学習">
         <h2>
-          今日の復習: {due}語 · 約{estimateMinutes(due)}分
+          今日の復習: {due}枚 · 約{estimateMinutes(due)}分
         </h2>
         <button type="button" className="btn-primary summary-btn" onClick={onStartReview} data-testid="summary-action">
           復習を始める
@@ -27,9 +27,9 @@ export function SummaryCard({ due, news, onStartReview, onStartNew }: Props) {
   if (news > 0) {
     return (
       <section className="card summary-card" data-testid="summary-card" aria-label="今日の学習">
-        <h2>今日の復習はありません。新しい単語が {news}語あります</h2>
+        <h2>今日の復習はありません。新しいカードが {news}枚あります</h2>
         <button type="button" className="btn-primary summary-btn" onClick={onStartNew} data-testid="summary-action">
-          新しい単語を学習する
+          新しいカードを学習する
         </button>
       </section>
     );

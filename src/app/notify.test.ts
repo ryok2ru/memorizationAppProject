@@ -34,9 +34,9 @@ describe('buildNotifyPayload', () => {
     expect(p.v).toBe(1);
     expect(p.list).toBe('VocaVault');
     expect(p.items).toEqual([
-      { at: '2026-09-19 08:00', title: '今日は2語の復習があります' },
-      { at: '2026-09-20 08:00', title: '復習が溜まっています。今日は3語' },
-      { at: '2026-09-21 08:00', title: '復習が溜まっています。今日は4語' },
+      { at: '2026-09-19 08:00', title: '今日は2枚の復習があります' },
+      { at: '2026-09-20 08:00', title: '復習が溜まっています。今日は3枚' },
+      { at: '2026-09-21 08:00', title: '復習が溜まっています。今日は4枚' },
     ]);
   });
 
@@ -44,8 +44,8 @@ describe('buildNotifyPayload', () => {
     const words = [mk('a', notifyTimeOnDay(now, 2, '21:15'))];
     const p = buildNotifyPayload(words, { ...settings, notifyTime: '21:15' }, now);
     expect(p.items).toEqual([
-      { at: '2026-09-20 21:15', title: '復習が溜まっています。今日は1語' },
-      { at: '2026-09-21 21:15', title: '復習が溜まっています。今日は1語' },
+      { at: '2026-09-20 21:15', title: '復習が溜まっています。今日は1枚' },
+      { at: '2026-09-21 21:15', title: '復習が溜まっています。今日は1枚' },
     ]);
   });
 
@@ -62,10 +62,10 @@ describe('buildNotifyPayload', () => {
 
 describe('buildShortcutUrl', () => {
   it('encodes the shortcut name and JSON', () => {
-    const url = buildShortcutUrl({ v: 1, list: 'VocaVault', items: [{ at: '2026-09-19 08:00', title: '今日は1語の復習があります' }] });
+    const url = buildShortcutUrl({ v: 1, list: 'VocaVault', items: [{ at: '2026-09-19 08:00', title: '今日は1枚の復習があります' }] });
     expect(url.startsWith('shortcuts://run-shortcut?name=' + encodeURIComponent('VocaVault通知') + '&input=text&text=')).toBe(true);
     const text = new URL(url).searchParams.get('text');
-    expect(JSON.parse(text!)).toEqual({ v: 1, list: 'VocaVault', items: [{ at: '2026-09-19 08:00', title: '今日は1語の復習があります' }] });
+    expect(JSON.parse(text!)).toEqual({ v: 1, list: 'VocaVault', items: [{ at: '2026-09-19 08:00', title: '今日は1枚の復習があります' }] });
     expect(url).not.toContain(' ');
     expect(url).not.toContain('"');
   });

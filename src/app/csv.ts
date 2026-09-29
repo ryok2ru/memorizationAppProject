@@ -1,5 +1,6 @@
 import type { ImportColumnRole, ImportDelimiter, Settings, Word } from '../domain/types';
 import { isWordValid, trimWord } from '../domain/validation';
+import type { Labels } from '../domain/labels';
 import { buildNewWord, bulkAddWords, listWordsInFolder } from '../db/repo';
 
 export interface ParsedRow {
@@ -24,9 +25,10 @@ export const DELIMITER_OPTIONS: { value: ImportDelimiter; label: string }[] = [
   { value: ';', label: 'セミコロン' },
 ];
 
-export const ROLE_OPTIONS: { value: ImportColumnRole; label: string }[] = [
-  { value: 'en', label: '英単語' },
-  { value: 'ja', label: '日本語訳' },
+/** 列の割り当ての選択肢。en = カードの表、ja = カードの裏で、表示は取込先フォルダの項目名（10-3） */
+export const roleOptions = (labels: Labels): { value: ImportColumnRole; label: string }[] => [
+  { value: 'en', label: labels.front },
+  { value: 'ja', label: labels.back },
   { value: 'memo', label: 'メモ' },
   { value: 'skip', label: '使わない' },
 ];
@@ -115,10 +117,17 @@ const HEADER_KEYWORDS: Record<Exclude<ImportColumnRole, 'skip'>, string[]> = {
   memo: ['メモ', '備考', 'memo', 'note', 'comment'],
 };
 
-/** 見出しのセルから列の役割を推定する。該当しなければ null */
-export function roleFromHeader(cell: string): ImportColumnRole | null {
+/**
+ * 見出しのセルから列の役割を推定する。該当しなければ null。
+ * labels（取込先フォルダの項目名）があれば、セル全体がそれと一致するかを先に見る（10-3）
+ */
+export function roleFromHeader(cell: string, labels?: Labels): ImportColumnRole | null {
   const c = stripBom(cell).trim().toLowerCase();
   if (c.length === 0) return null;
+  if (labels) {
+    if (c === labels.front.trim().toLowerCase()) return 'en';
+    if (c === labels.back.trim().toLowerCase()) return 'ja';
+  }
   for (const role of ['en', 'ja', 'memo'] as const) {
     if (HEADER_KEYWORDS[role].some((k) => c.startsWith(k.toLowerCase()))) return role;
   }
@@ -126,13 +135,13 @@ export function roleFromHeader(cell: string): ImportColumnRole | null {
 }
 
 /** 1 行目のいずれかのセルが見出しの語なら見出し行とみなす */
-export const looksLikeHeader = (row: string[]): boolean => row.some((c) => roleFromHeader(c) != null);
+export const looksLikeHeader = (row: string[], labels?: Labels): boolean => row.some((c) => roleFromHeader(c, labels) != null);
 
-/** 見出し行から割り当てを作る。英単語と日本語訳の両方が見つからなければ null。同じ役割は先頭の列だけに付ける */
-export function mappingFromHeader(row: string[]): ImportColumnRole[] | null {
+/** 見出し行から割り当てを作る。表と裏の両方が見つからなければ null。同じ役割は先頭の列だけに付ける */
+export function mappingFromHeader(row: string[], labels?: Labels): ImportColumnRole[] | null {
   const used = new Set<ImportColumnRole>();
   const mapping = row.map((cell) => {
-    const role = roleFromHeader(cell);
+    const role = roleFromHeader(cell, labels);
     if (!role || used.has(role)) return 'skip' as const;
     used.add(role);
     return role;
@@ -154,14 +163,14 @@ export const columnCount = (records: string[][]) => records.reduce((m, r) => Mat
 
 /**
  * 列の割り当ての初期値（10-3）。
- * 1. 見出し行から英単語と日本語訳が決まればそれ。
- * 2. 前回保存した割り当てが列数の範囲で英単語と日本語訳を含めばそれ。
- * 3. それ以外は左から 英単語, 日本語訳, メモ。
+ * 1. 見出し行から表と裏が決まればそれ。
+ * 2. 前回保存した割り当てが列数の範囲で表と裏を含めばそれ。
+ * 3. それ以外は左から 表, 裏, メモ。
  */
-export function initialColumns(records: string[][], hasHeader: boolean, saved: ImportColumnRole[]): ImportColumnRole[] {
+export function initialColumns(records: string[][], hasHeader: boolean, saved: ImportColumnRole[], labels?: Labels): ImportColumnRole[] {
   const count = columnCount(records);
   if (hasHeader && records.length > 0) {
-    const fromHeader = mappingFromHeader(records[0]);
+    const fromHeader = mappingFromHeader(records[0], labels);
     if (fromHeader) return fitColumns(fromHeader, count);
   }
   const fromSaved = fitColumns(saved, count);
@@ -170,11 +179,11 @@ export function initialColumns(records: string[][], hasHeader: boolean, saved: I
 }
 
 /** ファイルを選んだ直後の初期値。見出しの有無は 1 行目に見出しの語があれば ON、なければ前回の値 */
-export function initialOptions(text: string, saved: ImportSettings): ImportOptions {
+export function initialOptions(text: string, saved: ImportSettings, labels?: Labels): ImportOptions {
   const delimiter = initialDelimiter(text, saved.importDelimiter);
   const records = parseDelimited(stripBom(text), delimiter);
-  const hasHeader = records.length > 0 && looksLikeHeader(records[0]) ? true : saved.importHasHeader;
-  return { delimiter, hasHeader, columns: initialColumns(records, hasHeader, saved.importColumns) };
+  const hasHeader = records.length > 0 && looksLikeHeader(records[0], labels) ? true : saved.importHasHeader;
+  return { delimiter, hasHeader, columns: initialColumns(records, hasHeader, saved.importColumns, labels) };
 }
 
 export interface ParseResult {
