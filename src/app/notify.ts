@@ -9,11 +9,11 @@ export interface NotifyItem {
 
 export interface NotifyPayload {
   v: 1;
-  list: 'VocaVault';
+  list: 'Memoraq';
   items: NotifyItem[];
 }
 
-export const SHORTCUT_NAME = 'VocaVault通知';
+export const SHORTCUT_NAME = 'Memoraq通知';
 export const MAX_NOTIFY_DAYS = 30;
 
 /** 今日 + d 日の通知時刻（ms） */
@@ -37,7 +37,7 @@ export function buildNotifyPayload(words: Word[], settings: Settings, now: numbe
       title: d === 1 ? `今日は${n}枚の復習があります` : `復習が溜まっています。今日は${n}枚`,
     });
   }
-  return { v: 1, list: 'VocaVault', items };
+  return { v: 1, list: 'Memoraq', items };
 }
 
 export function buildShortcutUrl(payload: NotifyPayload): string {

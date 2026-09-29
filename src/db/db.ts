@@ -2,7 +2,8 @@ import Dexie, { type EntityTable } from 'dexie';
 import type { Folder, Word, ReviewLog, Settings } from '../domain/types';
 import { LEGACY_LABELS } from '../domain/labels';
 
-export const DB_NAME = 'vocavault';
+/** 旧名 'vocavault' の DB からは引き継がない（4-7） */
+export const DB_NAME = 'memoraq';
 
 export const db = new Dexie(DB_NAME) as Dexie & {
   folders: EntityTable<Folder, 'id'>;

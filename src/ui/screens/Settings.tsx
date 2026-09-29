@@ -16,19 +16,19 @@ import type { Settings as SettingsType } from '../../domain/types';
 
 const SHORTCUT_STEPS: [string, string][] = [
   ['入力から辞書を取得', '入力: ショートカットの入力'],
-  ['リマインダーを検索', 'フィルター: リスト が VocaVault、かつ 完了済み が いいえ'],
+  ['リマインダーを検索', 'フィルター: リスト が Memoraq、かつ 完了済み が いいえ'],
   ['リマインダーを削除', '対象: #2 の結果（前回分を消す。確認が出たら「削除」）'],
   ['辞書の値を取得', 'キー: items、対象: #1 の辞書'],
   ['各項目を繰り返す', '対象: #4 の値'],
   ['　辞書の値を取得', 'キー: at、対象: 繰り返し項目'],
   ['　日付', '「日付を指定」に #6 の値（形式 yyyy-MM-dd HH:mm。解釈されない場合は「日付をフォーマット」でカスタム形式 yyyy-MM-dd HH:mm を指定して変換する）'],
   ['　辞書の値を取得', 'キー: title、対象: 繰り返し項目'],
-  ['　新規リマインダーを追加', 'タイトル: #8、リスト: VocaVault、アラート: 日時 = #7'],
+  ['　新規リマインダーを追加', 'タイトル: #8、リスト: Memoraq、アラート: 日時 = #7'],
   ['繰り返しの終了', ''],
 ];
 
 const TEST_JSON =
-  '{"v":1,"list":"VocaVault","items":[{"at":"2026-09-19 08:00","title":"テスト通知 1"},{"at":"2026-09-20 08:00","title":"テスト通知 2"}]}';
+  '{"v":1,"list":"Memoraq","items":[{"at":"2026-09-19 08:00","title":"テスト通知 1"},{"at":"2026-09-20 08:00","title":"テスト通知 2"}]}';
 
 export function Settings() {
   const navigate = useNavigate();
@@ -180,9 +180,9 @@ export function Settings() {
           </p>
           <details>
             <summary>Shortcut の設定方法</summary>
-            <p className="small">事前準備: リマインダーアプリでリスト「VocaVault」を作る。</p>
+            <p className="small">事前準備: リマインダーアプリでリスト「Memoraq」を作る。</p>
             <p className="small">
-              Shortcuts アプリで新規ショートカットを作り、名前を <code>VocaVault通知</code> にして、次のアクションを順に追加する。
+              Shortcuts アプリで新規ショートカットを作り、名前を <code>Memoraq通知</code> にして、次のアクションを順に追加する。
             </p>
             <ol>
               {SHORTCUT_STEPS.map(([action, detail], i) => (
@@ -195,7 +195,7 @@ export function Settings() {
             <p className="small">
               初回実行時にリマインダーへのアクセスを求められたら許可する。Shortcuts の設定で「ショートカットの共有」に関する制限がある場合は解除する。
             </p>
-            <p className="small">動作確認用の JSON（「テキスト」アクションに入れ、「ショートカットを実行」で VocaVault通知 に渡す）:</p>
+            <p className="small">動作確認用の JSON（「テキスト」アクションに入れ、「ショートカットを実行」で Memoraq通知 に渡す）:</p>
             <pre>{TEST_JSON}</pre>
           </details>
         </div>

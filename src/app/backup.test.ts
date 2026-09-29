@@ -26,11 +26,11 @@ describe('backup', () => {
     await saveSettings({ maxCardsPerSession: 40, notifyEnabled: true });
     const before = await readSnapshot();
     const { text, fileName } = await exportBackup(now);
-    expect(fileName).toBe('vocavault-backup-20260918-0905.json');
+    expect(fileName).toBe('memoraq-backup-20260918-0905.json');
     await clearAll();
     expect((await readSnapshot()).words).toEqual([]);
     const parsed = parseBackup(text);
-    expect(parsed.app).toBe('VocaVault');
+    expect(parsed.app).toBe('Memoraq');
     expect(parsed.exportedAt).toBe(now);
     await importBackup(parsed);
     const after = await readSnapshot();
@@ -48,7 +48,7 @@ describe('backup', () => {
 
   it('favorite が無いレコード（schemaVersion 1 のファイル）は false として読む', () => {
     const v1 = {
-      app: 'VocaVault',
+      app: 'Memoraq',
       schemaVersion: 1,
       exportedAt: now,
       folders: [{ id: 'f', name: 'A', createdAt: now, sortOrder: 0 }],
@@ -67,7 +67,7 @@ describe('backup', () => {
 
   it('項目名が無いフォルダは英単語・日本語訳として読み、あればそのまま（4-2、10-2）', () => {
     const file = {
-      app: 'VocaVault',
+      app: 'Memoraq',
       schemaVersion: 2,
       exportedAt: now,
       folders: [
@@ -103,12 +103,16 @@ describe('backup', () => {
     expect(() => parseBackup(JSON.stringify({ app: 'Other', schemaVersion: 2, folders: [], words: [], reviewLogs: [] }))).toThrow(
       BackupFormatError,
     );
-    // 知らないバージョンは読まない
-    expect(() => parseBackup(JSON.stringify({ app: 'VocaVault', schemaVersion: 3, folders: [], words: [], reviewLogs: [] }))).toThrow(
+    // 旧名のファイルも読まない（改名前のバックアップは無い）
+    expect(() => parseBackup(JSON.stringify({ app: 'VocaVault', schemaVersion: 2, folders: [], words: [], reviewLogs: [] }))).toThrow(
       BackupFormatError,
     );
-    expect(() => parseBackup(JSON.stringify({ app: 'VocaVault', schemaVersion: 2, folders: [] }))).toThrow(BackupFormatError);
-    expect(() => parseBackup(JSON.stringify({ app: 'VocaVault', schemaVersion: 2, folders: [], words: [], reviewLogs: [] }))).not.toThrow();
-    expect(backupFileName(new Date(2026, 0, 1, 0, 0).getTime())).toBe('vocavault-backup-20260101-0000.json');
+    // 知らないバージョンは読まない
+    expect(() => parseBackup(JSON.stringify({ app: 'Memoraq', schemaVersion: 3, folders: [], words: [], reviewLogs: [] }))).toThrow(
+      BackupFormatError,
+    );
+    expect(() => parseBackup(JSON.stringify({ app: 'Memoraq', schemaVersion: 2, folders: [] }))).toThrow(BackupFormatError);
+    expect(() => parseBackup(JSON.stringify({ app: 'Memoraq', schemaVersion: 2, folders: [], words: [], reviewLogs: [] }))).not.toThrow();
+    expect(backupFileName(new Date(2026, 0, 1, 0, 0).getTime())).toBe('memoraq-backup-20260101-0000.json');
   });
 });

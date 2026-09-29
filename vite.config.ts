@@ -18,8 +18,8 @@ export default defineConfig({
       registerType: 'prompt',
       includeAssets: ['apple-touch-icon.png'],
       manifest: {
-        name: 'VocaVault',
-        short_name: 'VocaVault',
+        name: 'Memoraq',
+        short_name: 'Memoraq',
         lang: 'ja',
         start_url: './',
         scope: './',
