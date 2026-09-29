@@ -4,7 +4,7 @@ import { LEGACY_LABELS } from '../domain/labels';
 import { readSnapshot, replaceAll, type Snapshot } from '../db/repo';
 
 export interface Backup {
-  app: 'VocaVault';
+  app: 'Memoraq';
   /** 書き出しは常に BACKUP_SCHEMA_VERSION。読み込みは SUPPORTED_SCHEMA_VERSIONS を受け付ける（10-2） */
   schemaVersion: number;
   exportedAt: number;
@@ -22,7 +22,7 @@ export const SUPPORTED_SCHEMA_VERSIONS: readonly number[] = [1, 2];
 
 export function buildBackup(snapshot: Snapshot, now = Date.now()): Backup {
   return {
-    app: 'VocaVault',
+    app: 'Memoraq',
     schemaVersion: BACKUP_SCHEMA_VERSION,
     exportedAt: now,
     folders: snapshot.folders,
@@ -36,7 +36,7 @@ const pad2 = (n: number) => String(n).padStart(2, '0');
 
 export function backupFileName(now = Date.now()): string {
   const d = new Date(now);
-  return `vocavault-backup-${d.getFullYear()}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}-${pad2(d.getHours())}${pad2(d.getMinutes())}.json`;
+  return `memoraq-backup-${d.getFullYear()}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}-${pad2(d.getHours())}${pad2(d.getMinutes())}.json`;
 }
 
 export class BackupFormatError extends Error {
@@ -56,7 +56,7 @@ export function parseBackup(text: string): Backup {
   }
   if (typeof data !== 'object' || data === null) throw new BackupFormatError();
   const b = data as Partial<Backup>;
-  if (b.app !== 'VocaVault' || typeof b.schemaVersion !== 'number' || !SUPPORTED_SCHEMA_VERSIONS.includes(b.schemaVersion)) {
+  if (b.app !== 'Memoraq' || typeof b.schemaVersion !== 'number' || !SUPPORTED_SCHEMA_VERSIONS.includes(b.schemaVersion)) {
     throw new BackupFormatError();
   }
   if (!Array.isArray(b.folders) || !Array.isArray(b.words) || !Array.isArray(b.reviewLogs)) throw new BackupFormatError();
@@ -64,7 +64,7 @@ export function parseBackup(text: string): Backup {
   // calendarStartDate が無い（または数値でない）ファイルは null（全期間）として読む（4-5、10-2）
   const settings: Settings = { ...merged, calendarStartDate: typeof merged.calendarStartDate === 'number' ? merged.calendarStartDate : null };
   return {
-    app: 'VocaVault',
+    app: 'Memoraq',
     schemaVersion: BACKUP_SCHEMA_VERSION,
     exportedAt: typeof b.exportedAt === 'number' ? b.exportedAt : 0,
     // 項目名が無いフォルダ（v5 より前に書き出したファイル）は英単語帳として作られたので「英単語」「日本語訳」で読む（4-2、10-2）

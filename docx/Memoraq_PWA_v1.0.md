@@ -1,10 +1,10 @@
-# VocaVault 設計書（個人利用 PWA 版）
+# Memoraq 設計書（個人利用 PWA 版）
 
 Version 1.0　2026年9月18日
 
 | 項目 | 内容 |
 |---|---|
-| 対象 | 暗記カード学習アプリ VocaVault（英単語帳として始め、フォルダごとにカードの表・裏の項目名を決めて英単語以外の暗記にも使える）を、本人1人が iPhone で使う PWA として作り直す |
+| 対象 | 暗記カード学習アプリ Memoraq（英単語帳として始め、フォルダごとにカードの表・裏の項目名を決めて英単語以外の暗記にも使える）を、本人1人が iPhone で使う PWA として作り直す |
 | 位置づけ | 本書が唯一の正となる設計書。`docx/archive/` の旧3書（`requirements.md` = 旧要件定義書 v1.5、`screens.md` = 旧画面設計書 v1.7、`architecture.md` = 旧技術設計書 v1.4）は参考資料であり、本書と食い違う場合は本書を優先する |
 | 参考資料 | `docx/Spaced Repetition in Vocabulary Learning.pdf`（記憶科学と間隔反復の調査資料） |
 | 実装形態 | 本書を GitHub リポジトリにコミットし、クラウド上の自律エージェントが質問なしで実装を完走できる粒度で記述する |
@@ -39,6 +39,8 @@ Version 1.0　2026年9月18日
 ### 1-1. 目的
 
 FSRS（Free Spaced Repetition Scheduler）で復習日を決める暗記カード帳を、iPhone のホーム画面から起動する PWA として実装する。利用者は作者本人のみ。英単語帳として作ったが、表・裏の項目名をフォルダごとに決められるので（4-2）、用語や年号など英単語以外の暗記にも使える。
+
+旧名は VocaVault。既存の別アプリと同じ名前だったため Memoraq に改めた（`docx/archive/` の旧設計書は旧名のまま）。
 
 ### 1-2. 前提（変更不可）
 
@@ -337,6 +339,8 @@ ts-fsrs の `ReviewLog` 型をそのまま保存し、`id` と `wordId` を足�
 ### 4-7. スキーマ更新の方針
 
 Dexie の `version(n).stores()` を増やしていく。既存レコードの変換が必要なら `upgrade()` に書く。バックアップ JSON の `schemaVersion` はレコードの形に対応する番号で、インデックスの宣言だけを変えたバージョンでは上げない。項目が無いときに既定値で補えば読める追加（Settings の `importDelimiter` などや `calendarStartDate`、Folder の `frontLabel` / `backLabel`）でも上げない。読み込み時に既定値で補う（10-2）ので、古いファイルも新しいファイルも同じ番号のまま読める（現在は 2）。
+
+DB 名は `memoraq`。旧名 `vocavault` の DB からデータは引き継がない（改名時点で利用者に残すデータが無かったため。旧 DB は端末に残るが読まない）。
 
 | バージョン | 変更 | upgrade |
 |---|---|---|
@@ -776,7 +780,7 @@ Easy: 見た瞬間に分かった。間隔が最も長くなる。新しいカ�
 
 | 項目 | 値 |
 |---|---|
-| name / short_name | VocaVault |
+| name / short_name | Memoraq |
 | lang | ja |
 | start_url / scope | `./` |
 | display | standalone |
@@ -784,7 +788,7 @@ Easy: 見た瞬間に分かった。間隔が最も長くなる。新しいカ�
 | theme_color | #2E5090 |
 | icons | `icons/icon-192.png`（192）、`icons/icon-512.png`（512）、`icons/icon-512-maskable.png`（512、purpose: maskable） |
 
-アイコンは単色背景に白の「V」を描いた PNG を生成して置く（ビルド時に生成しても、リポジトリに含めてもよい）。
+アイコンは砂時計と芽の絵（元画像は `docx/icon/IMG_9846.jpeg`）。元画像からアイコン本体を切り出し、背景を白（#FFFFFF）にした、角まで塗った不透明な正方形の PNG をリポジトリに含める（iOS が角を丸めるので、画像側では丸めない）。`apple-touch-icon.png`（180）、`icons/icon-192.png`、`icons/icon-512.png`、`icons/icon-512-maskable.png`（図柄を中央 84% に縮め、周りを白で埋めたもの）の 4 つ。
 
 ### 8-2. index.html の head
 
@@ -793,7 +797,7 @@ Easy: 見た瞬間に分かった。間隔が最も長くなる。新しいカ�
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-<meta name="apple-mobile-web-app-title" content="VocaVault" />
+<meta name="apple-mobile-web-app-title" content="Memoraq" />
 <link rel="apple-touch-icon" href="apple-touch-icon.png" />
 <meta name="theme-color" content="#2E5090" />
 ```
@@ -859,7 +863,7 @@ Web にはスケジュール型のローカル通知が無いため、iOS の Sh
 
 1. 利用者は PWA の設定で通知時刻と予約日数を決める。
 2. 学習を終えたら「今日の学習を終える」ボタンを押す。
-3. PWA は翌日から予約日数分の「その日の通知時刻までに溜まる復習数」を計算し、JSON にして `shortcuts://run-shortcut` で Shortcut「VocaVault通知」に渡す。
+3. PWA は翌日から予約日数分の「その日の通知時刻までに溜まる復習数」を計算し、JSON にして `shortcuts://run-shortcut` で Shortcut「Memoraq通知」に渡す。
 4. Shortcut は前回作ったリマインダーを消し、各日のリマインダーをアラート日時付きで作る。
 5. リマインダーがその時刻に通知する。
 
@@ -877,14 +881,14 @@ Web にはスケジュール型のローカル通知が無いため、iOS の Sh
 
 ```ts
 interface NotifyItem { at: string; title: string }          // at は "YYYY-MM-DD HH:MM"（ローカル時刻）
-interface NotifyPayload { v: 1; list: 'VocaVault'; items: NotifyItem[] }
+interface NotifyPayload { v: 1; list: 'Memoraq'; items: NotifyItem[] }
 
 export function buildNotifyPayload(words: Word[], settings: Settings, now: number): NotifyPayload;
 export function buildShortcutUrl(payload: NotifyPayload): string;
 ```
 
 - 本文: d = 1 は「今日は N枚の復習があります」。d ≥ 2 は「復習が溜まっています。今日は N枚」。
-- URL: `shortcuts://run-shortcut?name=${encodeURIComponent('VocaVault通知')}&input=text&text=${encodeURIComponent(JSON.stringify(payload))}`
+- URL: `shortcuts://run-shortcut?name=${encodeURIComponent('Memoraq通知')}&input=text&text=${encodeURIComponent(JSON.stringify(payload))}`
 - ボタンを押したら `lastNotifyScheduledAt = now`、`lastNotifyItemCount = items.length` を保存してから URL を開く。
 - 通知が OFF のときはボタン自体を表示しない。
 - ホームには「最終予約: M/D HH:MM、N日分」を表示し、最終予約から 2 日以上経っていれば「予約を更新しましょう」を添える。
@@ -892,37 +896,37 @@ export function buildShortcutUrl(payload: NotifyPayload): string;
 例:
 
 ```json
-{"v":1,"list":"VocaVault","items":[
+{"v":1,"list":"Memoraq","items":[
   {"at":"2026-09-19 08:00","title":"今日は12枚の復習があります"},
   {"at":"2026-09-20 08:00","title":"復習が溜まっています。今日は20枚"}
 ]}
 ```
 
-### 9-4. Shortcut「VocaVault通知」の作り方（利用者が一度だけ行う）
+### 9-4. Shortcut「Memoraq通知」の作り方（利用者が一度だけ行う）
 
-事前準備: リマインダーアプリでリスト「VocaVault」を作る。
+事前準備: リマインダーアプリでリスト「Memoraq」を作る。
 
-Shortcuts アプリで新規ショートカットを作り、名前を `VocaVault通知` にして、次のアクションを順に追加する。
+Shortcuts アプリで新規ショートカットを作り、名前を `Memoraq通知` にして、次のアクションを順に追加する。
 
 | # | アクション | 設定 |
 |---|---|---|
 | 1 | 入力から辞書を取得 | 入力: ショートカットの入力 |
-| 2 | リマインダーを検索 | フィルター: リスト が VocaVault、かつ 完了済み が いいえ |
+| 2 | リマインダーを検索 | フィルター: リスト が Memoraq、かつ 完了済み が いいえ |
 | 3 | リマインダーを削除 | 対象: #2 の結果（前回分を消す。確認が出たら「削除」） |
 | 4 | 辞書の値を取得 | キー: items、対象: #1 の辞書 |
 | 5 | 各項目を繰り返す | 対象: #4 の値 |
 | 6 | 　辞書の値を取得 | キー: at、対象: 繰り返し項目 |
 | 7 | 　日付 | 「日付を指定」に #6 の値（形式 yyyy-MM-dd HH:mm として解釈される。解釈されない場合は「日付をフォーマット」でカスタム形式 `yyyy-MM-dd HH:mm` を指定して変換する） |
 | 8 | 　辞書の値を取得 | キー: title、対象: 繰り返し項目 |
-| 9 | 　新規リマインダーを追加 | タイトル: #8、リスト: VocaVault、アラート: 日時 = #7 |
+| 9 | 　新規リマインダーを追加 | タイトル: #8、リスト: Memoraq、アラート: 日時 = #7 |
 | 10 | 繰り返しの終了 | |
 
 初回実行時にリマインダーへのアクセスを求められたら許可する。Shortcuts の設定で「ショートカットの共有」に関する制限がある場合は解除する。
 
-動作確認用の JSON（PWA を使わずに試す）: Shortcuts の「テキスト」アクションに次を入れ、「ショートカットを実行」で `VocaVault通知` に渡す。
+動作確認用の JSON（PWA を使わずに試す）: Shortcuts の「テキスト」アクションに次を入れ、「ショートカットを実行」で `Memoraq通知` に渡す。
 
 ```json
-{"v":1,"list":"VocaVault","items":[{"at":"2026-09-19 08:00","title":"テスト通知 1"},{"at":"2026-09-20 08:00","title":"テスト通知 2"}]}
+{"v":1,"list":"Memoraq","items":[{"at":"2026-09-19 08:00","title":"テスト通知 1"},{"at":"2026-09-20 08:00","title":"テスト通知 2"}]}
 ```
 
 ### 9-5. 操作の流れとタップ数
@@ -957,7 +961,7 @@ Shortcuts アプリで新規ショートカットを作り、名前を `VocaVaul
 
 ```ts
 interface Backup {
-  app: 'VocaVault';
+  app: 'Memoraq';
   schemaVersion: number;   // 書き出しは 2（レコードの形に対応する番号。4-7）
   exportedAt: number;
   folders: Folder[];
@@ -967,7 +971,7 @@ interface Backup {
 }
 ```
 
-ファイル名 `vocavault-backup-YYYYMMDD-HHMM.json`。`navigator.canShare?.({ files: [file] })` が true なら `navigator.share()` で共有シートを出し（「ファイルに保存」で iCloud Drive などに保存できる）、そうでなければ `<a download>` で保存する。
+ファイル名 `memoraq-backup-YYYYMMDD-HHMM.json`。`navigator.canShare?.({ files: [file] })` が true なら `navigator.share()` で共有シートを出し（「ファイルに保存」で iCloud Drive などに保存できる）、そうでなければ `<a download>` で保存する。
 
 **読み込み**
 
@@ -1065,7 +1069,7 @@ interface Backup {
 ### 13-1. 前提
 
 - Node.js 20 以上。
-- GitHub の公開リポジトリ（GitHub Pages を無料で使うため）。リポジトリ名を `vocavault` とすると、公開 URL は `https://<user>.github.io/vocavault/` になる。
+- GitHub の公開リポジトリ（GitHub Pages を無料で使うため）。リポジトリ名を `memoraq` とすると、公開 URL は `https://<user>.github.io/memoraq/` になる。
 
 ### 13-2. 初期化
 
@@ -1148,7 +1152,7 @@ jobs:
 | 6 | バックアップの書き出し | 共有シートから「ファイルに保存」できる |
 | 7 | バックアップの読み込み | 置き換え後にデータが一致する |
 | 8 | CSV 取込 | 件数が報告どおり |
-| 9 | Shortcut のテスト JSON | リマインダー VocaVault に 2 件できる |
+| 9 | Shortcut のテスト JSON | リマインダー Memoraq に 2 件できる |
 | 10 | 「今日の学習を終える」 | Shortcuts が開き、リマインダーが予約日数分できる。翌日の指定時刻に通知が届く |
 | 11 | 2 回目の「学習を終える」 | 前回分が消えて新しい分だけになる |
 | 12 | アプリバッジ | 復習がある日の起動後にアイコンに数字が出る。0 で消える |
@@ -1219,9 +1223,9 @@ jobs:
 ## 付録A. リポジトリ直下に置く CLAUDE.md の内容
 
 ```markdown
-# VocaVault
+# Memoraq
 
-英単語学習 PWA。仕様は docx/VocaVault_PWA_v1.0.md が唯一の正。docx/archive/ は旧設計で参考のみ。
+暗記カード学習 PWA。仕様は docx/Memoraq_PWA_v1.0.md が唯一の正。docx/archive/ は旧設計で参考のみ。
 
 ## コマンド
 - npm run dev      開発サーバー
@@ -1364,7 +1368,7 @@ import Dexie, { type EntityTable } from 'dexie';
 import type { Folder, Word, ReviewLog, Settings } from '../domain/types';
 import { LEGACY_LABELS } from '../domain/labels';
 
-export const db = new Dexie('vocavault') as Dexie & {
+export const db = new Dexie('memoraq') as Dexie & {
   folders: EntityTable<Folder, 'id'>;
   words: EntityTable<Word, 'id'>;
   reviewLogs: EntityTable<ReviewLog, 'id'>;
