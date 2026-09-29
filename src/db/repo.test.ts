@@ -17,11 +17,13 @@ import {
   getWord,
   listDueWords,
   listFavoriteWords,
+  listFolders,
   listNewWords,
   listReviewLogsForWord,
   listReviewTimes,
   moveWords,
   readSnapshot,
+  reorderFolders,
   replaceAll,
   resetProgress,
   revertRating,
@@ -48,6 +50,20 @@ describe('folders', () => {
     const b = await createFolder('B', now);
     expect(a.sortOrder).toBe(0);
     expect(b.sortOrder).toBe(1);
+  });
+
+  it('reorderFolders が並びを保存し、その後に作ったフォルダは末尾に付く', async () => {
+    const a = await createFolder('A', now);
+    const b = await createFolder('B', now);
+    const c = await createFolder('C', now);
+    await reorderFolders([c.id, a.id, b.id]);
+    expect((await listFolders()).map((f) => [f.name, f.sortOrder])).toEqual([
+      ['C', 0],
+      ['A', 1],
+      ['B', 2],
+    ]);
+    await createFolder('D', now);
+    expect((await listFolders()).map((f) => f.name)).toEqual(['C', 'A', 'B', 'D']);
   });
 
   it('項目名の既定は表・裏で、updateFolder が名前と項目名を trim して更新する', async () => {
