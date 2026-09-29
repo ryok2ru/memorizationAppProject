@@ -1,5 +1,6 @@
 import type { Folder, Word, ReviewLog, Settings } from '../domain/types';
 import { DEFAULT_SETTINGS } from '../domain/types';
+import { LEGACY_LABELS } from '../domain/labels';
 import { readSnapshot, replaceAll, type Snapshot } from '../db/repo';
 
 export interface Backup {
@@ -66,7 +67,12 @@ export function parseBackup(text: string): Backup {
     app: 'VocaVault',
     schemaVersion: BACKUP_SCHEMA_VERSION,
     exportedAt: typeof b.exportedAt === 'number' ? b.exportedAt : 0,
-    folders: b.folders,
+    // 項目名が無いフォルダ（v5 より前に書き出したファイル）は英単語帳として作られたので「英単語」「日本語訳」で読む（4-2、10-2）
+    folders: b.folders.map((f) => ({
+      ...f,
+      frontLabel: typeof f?.frontLabel === 'string' && f.frontLabel.trim() ? f.frontLabel : LEGACY_LABELS.front,
+      backLabel: typeof f?.backLabel === 'string' && f.backLabel.trim() ? f.backLabel : LEGACY_LABELS.back,
+    })),
     // favorite が無いレコード（schemaVersion 1 のファイル）は false として読む（4-3、10-2）
     words: b.words.map((w) => ({ ...w, favorite: w?.favorite === true })),
     reviewLogs: b.reviewLogs,

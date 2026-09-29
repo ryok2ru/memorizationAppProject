@@ -1,5 +1,6 @@
 import Dexie, { type EntityTable } from 'dexie';
 import type { Folder, Word, ReviewLog, Settings } from '../domain/types';
+import { LEGACY_LABELS } from '../domain/labels';
 
 export const DB_NAME = 'vocavault';
 
@@ -63,5 +64,26 @@ db.version(4)
       .toCollection()
       .modify((s: { calendarStartDate?: number | null }) => {
         s.calendarStartDate = null;
+      }),
+  );
+
+/**
+ * v5: Folder に frontLabel / backLabel（カードの表と裏の項目名）を足す（4-2、4-7）。
+ * 既存のフォルダは英単語帳として作られたので「英単語」「日本語訳」を入れる。インデックスは v4 と同じ。
+ */
+db.version(5)
+  .stores({
+    folders: 'id, sortOrder',
+    words: 'id, folderId, due, state, [folderId+due], [folderId+state]',
+    reviewLogs: 'id, wordId, review',
+    settings: 'id',
+  })
+  .upgrade((tx) =>
+    tx
+      .table('folders')
+      .toCollection()
+      .modify((f: { frontLabel?: string; backLabel?: string }) => {
+        f.frontLabel = LEGACY_LABELS.front;
+        f.backLabel = LEGACY_LABELS.back;
       }),
   );

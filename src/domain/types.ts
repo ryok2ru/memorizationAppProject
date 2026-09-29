@@ -18,6 +18,10 @@ export const isFavoritesScope = (scope: Scope): boolean => scope === FAVORITES;
 export interface Folder {
   id: string;
   name: string;
+  /** カードの表の項目名（Word.englishTerm の見出し）。既定「表」、v5 より前のフォルダは「英単語」（4-2） */
+  frontLabel: string;
+  /** カードの裏の項目名（Word.japaneseDefinition の見出し）。既定「裏」、v5 より前のフォルダは「日本語訳」（4-2） */
+  backLabel: string;
   createdAt: number;
   sortOrder: number;
 }
@@ -38,7 +42,9 @@ export interface FsrsFields {
 export interface Word extends FsrsFields {
   id: string;
   folderId: string;
+  /** カードの表。名前は英単語帳だった頃のまま（4-3） */
   englishTerm: string;
+  /** カードの裏。カンマ区切りで複数の答えを書ける。名前は英単語帳だった頃のまま（4-3） */
   japaneseDefinition: string;
   memo: string;
   /** お気に入り（☆）。既定 false（4-3） */
@@ -104,6 +110,7 @@ export const LIMITS = {
   japaneseDefinition: 500,
   memo: 1000,
   folderName: 50,
+  folderLabel: 20,
   masteredStability: 30,
 } as const;
 

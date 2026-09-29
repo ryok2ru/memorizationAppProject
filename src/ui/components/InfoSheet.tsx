@@ -5,18 +5,18 @@ import { STATE_ICONS, STATE_NAMES, type CardState, type Grade } from '../../doma
 
 /** 【状態】の文面（設計書 7-9）。アイコンと名前は STATE_ICONS / STATE_NAMES を使う */
 export const INFO_STATES: { state: CardState; text: string }[] = [
-  { state: 0, text: 'まだ一度も学習していない単語。' },
-  { state: 1, text: '初めて評価したあと、このセッション内で再出題を待っている単語。再出題で Hard 以上なら Review に進む。' },
-  { state: 2, text: '復習段階に入った単語。FSRS が決めた間隔で復習する。' },
-  { state: 3, text: '復習で Again を押した単語。再出題で Hard 以上なら Review に戻る。' },
+  { state: 0, text: 'まだ一度も学習していないカード。' },
+  { state: 1, text: '初めて評価したあと、このセッション内で再出題を待っているカード。再出題で Hard 以上なら Review に進む。' },
+  { state: 2, text: '復習段階に入ったカード。FSRS が決めた間隔で復習する。' },
+  { state: 3, text: '復習で Again を押したカード。再出題で Hard 以上なら Review に戻る。' },
 ];
 
 /** 【評価】の文面（設計書 7-9）。並びは Again → Hard → Good → Easy */
 export const INFO_GRADES: { grade: Grade; name: string; text: string }[] = [
-  { grade: 1, name: 'Again', text: '意味が出てこなかった。安定性が下がり、このセッション内でもう一度出る。' },
+  { grade: 1, name: 'Again', text: '答えが出てこなかった。安定性が下がり、このセッション内でもう一度出る。' },
   { grade: 2, name: 'Hard', text: '思い出せたが時間がかかった、または自信がなかった。間隔は Good より短くなる。' },
   { grade: 3, name: 'Good', text: '普通に思い出せた。標準的に間隔が伸びる。迷ったらこれ。' },
-  { grade: 4, name: 'Easy', text: '見た瞬間に分かった。間隔が最も長くなる。新しい単語なら再出題なしで Review に進む。' },
+  { grade: 4, name: 'Easy', text: '見た瞬間に分かった。間隔が最も長くなる。新しいカードなら再出題なしで Review に進む。' },
 ];
 
 /** 【補足】の文面（設計書 7-9） */

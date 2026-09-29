@@ -93,7 +93,7 @@ export function Settings() {
     try {
       const n = await resetProgress(resetTarget === 'all' ? null : resetTarget);
       await updateBadge();
-      setMessage(`${n}語の進捗をリセットしました`);
+      setMessage(`${n}枚の進捗をリセットしました`);
     } catch (e) {
       setMessage(errorMessage(e));
     }
@@ -223,8 +223,8 @@ export function Settings() {
             ブラウザのタブで使うとデータが消えることがあります。ホーム画面に追加して使い、定期的にバックアップを書き出してください。
           </p>
           <p className="small muted" style={{ margin: 0 }}>
-            CSV/TSV 取込は各フォルダの画面の右上「＋」で開く「単語を追加」画面の、メモ欄の下のリンク「複数の単語をまとめて登録する（CSV / TSV 取込）」から行います。ファイルを選ぶと取込画面が開き、区切り文字（カンマ / タブ / セミコロン）、1 行目が見出しかどうか、各列の割り当て（英単語 / 日本語訳 / メモ / 使わない）を確認してから取り込めます。
-            日本語訳にカンマ区切りの複数候補を書く場合、CSV ではダブルクォートで囲みます（例: <code>ambiguous,"曖昧な,あいまいな"</code>）。TSV ならそのまま書けます。
+            CSV/TSV 取込は各フォルダの画面の右上「＋」で開く「カードを追加」画面の、メモ欄の下のリンク「複数のカードをまとめて登録する（CSV / TSV 取込）」から行います。ファイルを選ぶと取込画面が開き、区切り文字（カンマ / タブ / セミコロン）、1 行目が見出しかどうか、各列の割り当て（表 / 裏 / メモ / 使わない。表と裏はフォルダの項目名で表示）を確認してから取り込めます。
+            裏にカンマ区切りで複数の答えを書く場合、CSV ではダブルクォートで囲みます（例: <code>ambiguous,"曖昧な,あいまいな"</code>）。TSV ならそのまま書けます。
           </p>
           <label className="setting-row">
             <span>進捗リセット</span>
@@ -292,7 +292,7 @@ export function Settings() {
       <ConfirmDialog
         open={confirmReset}
         title="進捗リセット"
-        message="進捗をリセットしますか？単語データは保持されます。"
+        message="進捗をリセットしますか？カードのデータは保持されます。"
         confirmLabel="リセット"
         danger
         onConfirm={onReset}

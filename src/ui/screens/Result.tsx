@@ -124,8 +124,8 @@ export function Result() {
           評価が 0 件（途中終了）のときは枠ごと出さない */}
       {data != null && data.rows.length > 0 && (
         <div className="stat result-words">
-          <div className="label">評価した単語</div>
-          <ul className="result-word-list" aria-label="評価した単語">
+          <div className="label">評価したカード</div>
+          <ul className="result-word-list" aria-label="評価したカード">
             {data.rows.map(({ word, grade, due }) => {
               const on = favorites[word.id] ?? word.favorite;
               return (

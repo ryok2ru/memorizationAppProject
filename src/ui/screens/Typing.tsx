@@ -4,6 +4,9 @@ import { ProgressBar } from '../components/ProgressBar';
 import { QuitSheet } from '../components/QuitSheet';
 import { FavoriteButton } from '../components/FavoriteButton';
 import { useStudy } from '../useStudy';
+import { useAsync } from '../hooks';
+import { listFolders } from '../../db/repo';
+import { labelsForScope } from '../../domain/labels';
 import { checkEn, checkJa, splitCandidates } from '../../domain/normalize';
 import { GRADE_NAMES } from '../../domain/types';
 
@@ -16,7 +19,11 @@ export function Typing() {
   const [judged, setJudged] = useState<'ok' | 'ng' | null>(null);
   const [confirmQuit, setConfirmQuit] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  // enToJa = 表を見て裏を答える、jaToEn = 裏を見て表を答える（6-4）
   const enToJa = session?.mode === 'enToJa';
+  // 見出しと入力欄の案内は、モード選択と同じく対象範囲の項目名（7-6）。読み込むまでは空にして、表記が切り替わって見えないようにする
+  const { data: folders } = useAsync(() => listFolders(), []);
+  const labels = session && folders ? labelsForScope(session.context.scope, folders) : null;
 
   useEffect(() => {
     setInput('');
@@ -47,7 +54,7 @@ export function Typing() {
   return (
     <div className="screen study-screen">
       <Header
-        title={enToJa ? '英→日 入力' : '日→英 入力'}
+        title={!labels ? '' : enToJa ? `${labels.front}→${labels.back} 入力` : `${labels.back}→${labels.front} 入力`}
         left={
           <button
             type="button"
@@ -102,11 +109,10 @@ export function Typing() {
               <input
                 ref={inputRef}
                 type="text"
-                lang="ja"
                 value={input}
                 disabled={!!judged}
                 aria-label="答え"
-                placeholder="日本語訳を入力"
+                placeholder={labels ? `${labels.back}を入力` : ''}
                 onChange={(e) => setInput(e.target.value)}
                 data-testid="typing-input"
               />
@@ -114,14 +120,13 @@ export function Typing() {
               <input
                 ref={inputRef}
                 type="text"
-                lang="en"
                 autoCapitalize="off"
                 autoCorrect="off"
                 spellCheck={false}
                 value={input}
                 disabled={!!judged}
                 aria-label="答え"
-                placeholder="英単語を入力"
+                placeholder={labels ? `${labels.front}を入力` : ''}
                 onChange={(e) => setInput(e.target.value)}
                 data-testid="typing-input"
               />

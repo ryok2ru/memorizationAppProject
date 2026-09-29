@@ -22,6 +22,7 @@ import {
 import { updateBadge } from '../../app/badge';
 import { endOfDay, relativeDueLabel } from '../../domain/dates';
 import { FAVORITES, LIMITS, STATE_ICONS, STATE_NAMES, type CardState, type Folder, type Word } from '../../domain/types';
+import { folderLabels } from '../../domain/labels';
 
 type Filter = 'all' | 'due' | 'mastered';
 
@@ -113,8 +114,8 @@ export const favoriteMessage = (n: number, on: boolean): string =>
 /** 選択モードの削除の確認文（7-3、8）。★ 付きを含むときだけ件数を添える */
 export const bulkDeleteMessage = (n: number, favorites: number): string =>
   favorites > 0
-    ? `${n}件の単語と学習履歴を削除します。お気に入り${favorites}件を含みます。よろしいですか？`
-    : `${n}件の単語と学習履歴を削除します。よろしいですか？`;
+    ? `${n}件のカードと学習履歴を削除します。お気に入り${favorites}件を含みます。よろしいですか？`
+    : `${n}件のカードと学習履歴を削除します。よろしいですか？`;
 
 /** スワイプ削除の「元に戻す」を表示する時間 */
 export const UNDO_MS = 5000;
@@ -344,7 +345,7 @@ export function WordList({ favorites = false }: { favorites?: boolean } = {}) {
     }
   };
 
-  const startLabel = dueCount > 0 ? `学習開始（${dueCount}語）` : newCount > 0 ? `新しい単語を学習（${newCount}語）` : '学習できる単語がありません';
+  const startLabel = dueCount > 0 ? `学習開始（${dueCount}枚）` : newCount > 0 ? `新しいカードを学習（${newCount}枚）` : '学習できるカードがありません';
 
   const rowText = (w: Word) => (
     <>
@@ -380,7 +381,7 @@ export function WordList({ favorites = false }: { favorites?: boolean } = {}) {
             <>
               {/* お気に入り一覧には「＋」を置かない（7-3）。取込は単語フォーム（新規）の中だけ */}
               {!favorites && (
-                <button type="button" className="btn-icon" aria-label="単語を追加" onClick={() => navigate(`/folders/${folderId}/words/new`)}>
+                <button type="button" className="btn-icon" aria-label="カードを追加" onClick={() => navigate(`/folders/${folderId}/words/new`)}>
                   ＋
                 </button>
               )}
@@ -400,7 +401,7 @@ export function WordList({ favorites = false }: { favorites?: boolean } = {}) {
 
       <input
         type="search"
-        placeholder="検索（英語・日本語訳）"
+        placeholder={data?.folder ? `検索（${folderLabels(data.folder).front}・${folderLabels(data.folder).back}）` : '検索'}
         aria-label="検索"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
@@ -441,16 +442,16 @@ export function WordList({ favorites = false }: { favorites?: boolean } = {}) {
 
       {filtering && (
         <div className="small muted center" data-testid="count-display">
-          {words.length}語中{shown.length}語を表示中
+          {words.length}枚中{shown.length}枚を表示中
         </div>
       )}
 
       <StateBar counts={byState} />
 
       {data && words.length === 0 ? (
-        <EmptyState message={favorites ? 'お気に入りの単語がありません' : '単語がありません。＋で追加するか取込してください'} />
+        <EmptyState message={favorites ? 'お気に入りのカードがありません' : 'カードがありません。＋で追加するか取込してください'} />
       ) : (
-        <ul className="word-list" aria-label="単語一覧">
+        <ul className="word-list" aria-label="カード一覧">
           {shown.map((w) => (
             <li key={w.id} className="word-row">
               {selecting ? (
@@ -520,7 +521,7 @@ export function WordList({ favorites = false }: { favorites?: boolean } = {}) {
 
       <ConfirmDialog
         open={confirmBulk}
-        title="単語を削除"
+        title="カードを削除"
         message={bulkDeleteMessage(selected.size, selectedFavorites)}
         confirmLabel="削除"
         danger

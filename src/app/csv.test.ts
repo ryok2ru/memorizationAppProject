@@ -13,6 +13,7 @@ import {
   parseImportText,
   planImport,
   roleFromHeader,
+  roleOptions,
   type ImportOptions,
 } from './csv';
 import type { Word } from '../domain/types';
@@ -65,6 +66,17 @@ describe('header detection and column mapping', () => {
     expect(looksLikeHeader(['英単語', '日本語訳'])).toBe(true);
     expect(looksLikeHeader(['x', 'meaning'])).toBe(true);
     expect(looksLikeHeader(['apple', 'りんご'])).toBe(false);
+  });
+  it('取込先フォルダの項目名と一致する見出しは、表・裏として先に判定する', () => {
+    const labels = { front: '用語', back: '説明' };
+    expect(roleFromHeader('用語', labels)).toBe('en');
+    expect(roleFromHeader(' 説明 ', labels)).toBe('ja');
+    expect(roleFromHeader('用語', undefined)).toBeNull();
+    expect(mappingFromHeader(['説明', '用語', 'メモ'], labels)).toEqual(['ja', 'en', 'memo']);
+    const o = initialOptions('用語,説明\nA,B\n', saved, labels);
+    expect(o.hasHeader).toBe(true);
+    expect(o.columns).toEqual(['en', 'ja']);
+    expect(roleOptions(labels).map((x) => x.label)).toEqual(['用語', '説明', 'メモ', '使わない']);
   });
   it('mappingFromHeader requires en and ja and keeps only the first of duplicates', () => {
     expect(mappingFromHeader(['メモ', '日本語訳', '英単語'])).toEqual(['memo', 'ja', 'en']);

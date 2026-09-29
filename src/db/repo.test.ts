@@ -11,6 +11,7 @@ import {
   deleteWord,
   deleteWords,
   ensureFsrsFields,
+  getFolder,
   getSettings,
   getWord,
   listDueWords,
@@ -27,6 +28,7 @@ import {
   saveSettings,
   setFavorite,
   setFavorites,
+  updateFolder,
   updateWordText,
 } from './repo';
 import { rate } from '../domain/fsrs';
@@ -45,6 +47,15 @@ describe('folders', () => {
     const b = await createFolder('B', now);
     expect(a.sortOrder).toBe(0);
     expect(b.sortOrder).toBe(1);
+  });
+
+  it('項目名の既定は表・裏で、updateFolder が名前と項目名を trim して更新する', async () => {
+    const a = await createFolder('A', now);
+    expect([a.frontLabel, a.backLabel]).toEqual(['表', '裏']);
+    const b = await createFolder('B', now, { front: ' 用語 ', back: '説明' });
+    expect([b.frontLabel, b.backLabel]).toEqual(['用語', '説明']);
+    await updateFolder(a.id, ' A2 ', { front: '問題', back: ' 答え ' });
+    expect(await getFolder(a.id)).toMatchObject({ name: 'A2', frontLabel: '問題', backLabel: '答え', sortOrder: 0 });
   });
 
   it('deleteFolder cascades to words and review logs', async () => {
