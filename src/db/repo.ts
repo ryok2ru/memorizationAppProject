@@ -51,6 +51,13 @@ export async function updateFolder(id: string, name: string, labels: Labels): Pr
   await db.folders.update(id, { name: name.trim(), frontLabel: labels.front.trim(), backLabel: labels.back.trim() });
 }
 
+/** フォルダの並び替え（7-2）。ids の順に sortOrder を 0 からの連番で振り直す。1 トランザクションで行う */
+export async function reorderFolders(ids: string[]): Promise<void> {
+  await db.transaction('rw', db.folders, async () => {
+    await Promise.all(ids.map((id, i) => db.folders.update(id, { sortOrder: i })));
+  });
+}
+
 /** フォルダと配下の単語、その履歴を削除 */
 export async function deleteFolder(id: string): Promise<void> {
   await deleteFolders([id]);

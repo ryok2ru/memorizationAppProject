@@ -423,13 +423,40 @@ button:disabled,
   color: var(--muted);
 }
 
-/* 選択中は「…」が無いので、右の余白をお気に入りのカードとそろえる */
-.folder-card.selecting {
-  padding-right: 12px;
-}
-
 .folder-card.selecting .folder-main {
   cursor: pointer;
+}
+
+/* 選択中の「…」の位置に出す並べ替えのつまみ（≡、7-2）。3 本の横線を描き、縦のドラッグだけを受ける */
+.btn-grip {
+  flex: none;
+  flex-direction: column;
+  gap: 4px;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  cursor: grab;
+}
+
+.btn-grip > span {
+  width: 18px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--muted);
+}
+
+/* ドラッグ中: 他のカードは落とす位置に合わせて滑らかにずれ、つかんだカードは指に追従して手前に浮く */
+.folder-list.reordering > li {
+  transition: transform 0.15s ease-out;
+}
+
+.folder-list.reordering > li.reorder-active {
+  transition: none;
+  position: relative;
+  z-index: 1;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
+  cursor: grabbing;
 }
 
 /* 単語一覧: 区切り線のあるリスト行（7-3） */

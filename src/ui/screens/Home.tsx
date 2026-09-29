@@ -10,8 +10,9 @@ import { InfoSheet } from '../components/InfoSheet';
 import { SwipeRow } from '../components/SwipeRow';
 import { syncModal, useCloseOnOutside } from '../components/modal';
 import { allSelected, toggleAll } from '../components/selection';
+import { moveItem, useReorder } from '../components/reorder';
 import { useAsync, isStandalone, errorMessage } from '../hooks';
-import { createFolder, deleteFolder, deleteFolders, listAllWords, listFolders, setFavorite, updateFolder } from '../../db/repo';
+import { createFolder, deleteFolder, deleteFolders, listAllWords, listFolders, reorderFolders, setFavorite, updateFolder } from '../../db/repo';
 import { loadOverview, loadScopeStats, type ScopeStats } from '../../app/stats';
 import { loadStreak, streakMessage } from '../../app/streak';
 import { loadSettings, requestPersistentStorage } from '../../app/settings';
@@ -68,6 +69,9 @@ export function Home() {
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [confirmBulk, setConfirmBulk] = useState(false);
+  /** 並べ替えた直後の並び（フォルダ id）。保存と読み直しが終わるまでの間、画面にすぐ反映するために使う */
+  const [order, setOrder] = useState<string[] | null>(null);
+  const listRef = useRef<HTMLUListElement>(null);
 
   useEffect(() => {
     void updateBadge();
@@ -113,7 +117,16 @@ export function Home() {
       return next;
     });
 
-  const folderIds = useMemo(() => (data?.folders ?? []).map((f) => f.id), [data]);
+  // 読み直したら DB の並びに戻す（保存した並びと同じなので見た目は変わらない）
+  useEffect(() => setOrder(null), [data]);
+  const folders = useMemo(() => {
+    const list = data?.folders ?? [];
+    if (!order) return list;
+    const byId = new Map(list.map((f) => [f.id, f]));
+    return order.flatMap((id) => byId.get(id) ?? []);
+  }, [data, order]);
+
+  const folderIds = useMemo(() => folders.map((f) => f.id), [folders]);
   const allFoldersSelected = allSelected(selected, folderIds);
   /** 選んだフォルダの単語数の合計（確認文に出す） */
   const selectedCards = [...selected].reduce((n, id) => n + (data?.stats[id]?.total ?? 0), 0);
@@ -130,6 +143,20 @@ export function Home() {
       setMessage(errorMessage(e));
     }
   };
+
+  // ---------- フォルダの並び替え（7-2）。選択モード中の ≡ を縦にドラッグする ----------
+
+  const onReorder = async (from: number, to: number) => {
+    const ids = moveItem(folderIds, from, to);
+    setOrder(ids);
+    try {
+      await reorderFolders(ids);
+    } catch (e) {
+      setMessage(errorMessage(e));
+    }
+    reload();
+  };
+  const reorder = useReorder(listRef, (from, to) => void onReorder(from, to));
 
   /** 検索結果の行の右スワイプでお気に入りを切り替える（7-2、7-3）。★ の件数が変わるのでホームの集計も読み直す */
   const swipeFavorite = async (word: Word) => {
@@ -238,18 +265,19 @@ export function Home() {
 
       {data && (
         <>
+          {/* 上から状態別割合、ストリーク、サマリーカード（7-2） */}
+          <StateBar counts={data.overview.byState} />
+
+          <div className="center" data-testid="streak">
+            {streakMessage(data.streak)}
+          </div>
+
           <SummaryCard
             due={data.overview.due}
             news={data.overview.news}
             onStartReview={() => navigate('/study/select?scope=all')}
             onStartNew={() => navigate('/study/select?scope=all')}
           />
-
-          <div className="center" data-testid="streak">
-            {streakMessage(data.streak)}
-          </div>
-
-          <StateBar counts={data.overview.byState} />
 
           {searching ? (
             allWords == null ? null : results.length === 0 ? (
@@ -287,20 +315,22 @@ export function Home() {
             )
           ) : (
             <>
-              {/* 実体のないフォルダ。常に一番上に出し、「…」メニューも選択も持たない（7-2） */}
-              <div className="folder-card favorites-card" data-testid="favorites-card">
-                <Link to="/favorites" className="btn folder-main">
-                  <span className="folder-icon" aria-hidden="true">
-                    ★
-                  </span>
-                  <span className="row-text">
-                    <span className="row-title">お気に入り</span>
-                    <span className="row-sub">
-                      {data.favorites.total}枚 ・ 今日の復習 {data.favorites.due}枚
+              {/* 実体のないフォルダ。★ 付きが 1 件以上のときだけ一番上に出し、「…」メニューも選択も持たない（7-2） */}
+              {data.favorites.total > 0 && (
+                <div className="folder-card favorites-card" data-testid="favorites-card">
+                  <Link to="/favorites" className="btn folder-main">
+                    <span className="folder-icon" aria-hidden="true">
+                      ★
                     </span>
-                  </span>
-                </Link>
-              </div>
+                    <span className="row-text">
+                      <span className="row-title">お気に入り</span>
+                      <span className="row-sub">
+                        {data.favorites.total}枚 ・ 今日の復習 {data.favorites.due}枚
+                      </span>
+                    </span>
+                  </Link>
+                </div>
+              )}
 
               <section className="folder-section" aria-labelledby="folders-title">
                 {/* 見出し「フォルダ」の行。お気に入りとの区切りを兼ね、右端にフォルダの操作を置く（7-2） */}
@@ -337,8 +367,8 @@ export function Home() {
                     </>
                   )}
                 </div>
-                <ul className="folder-list" aria-label="フォルダ一覧">
-                  {data.folders.map((f) => {
+                <ul ref={listRef} className={`folder-list${reorder.dragging ? ' reordering' : ''}`} aria-label="フォルダ一覧">
+                  {folders.map((f, i) => {
                     const s = data.stats[f.id] ?? { total: 0, due: 0 };
                     const body = (
                       <>
@@ -353,14 +383,22 @@ export function Home() {
                         </span>
                       </>
                     );
+                    const item = reorder.itemProps(i);
                     return (
-                      <li key={f.id} className={`folder-card${selecting ? ' selecting' : ''}`}>
+                      <li key={f.id} className={`folder-card${selecting ? ' selecting' : ''}${item.className}`} style={item.style}>
                         {selecting ? (
-                          // 選択中はカード全体でチェックを切り替え、「…」は出さない
-                          <label className="btn folder-main select-row">
-                            <input type="checkbox" checked={selected.has(f.id)} onChange={() => toggleSelected(f.id)} aria-label={`${f.name} を選択`} />
-                            {body}
-                          </label>
+                          // 選択中はカード全体でチェックを切り替え、「…」の代わりに並べ替えのつまみ（≡）を出す
+                          <>
+                            <label className="btn folder-main select-row">
+                              <input type="checkbox" checked={selected.has(f.id)} onChange={() => toggleSelected(f.id)} aria-label={`${f.name} を選択`} />
+                              {body}
+                            </label>
+                            <button type="button" className="btn-icon btn-grip" aria-label={`${f.name} を並べ替え`} {...reorder.handleProps(i)}>
+                              <span aria-hidden="true" />
+                              <span aria-hidden="true" />
+                              <span aria-hidden="true" />
+                            </button>
+                          </>
                         ) : (
                           <>
                             <Link to={`/folders/${f.id}`} className="btn folder-main">
@@ -376,7 +414,7 @@ export function Home() {
                       </li>
                     );
                   })}
-                  {data.folders.length === 0 && (
+                  {folders.length === 0 && (
                     <li>
                       <EmptyState message="フォルダがありません。＋で追加してください" />
                     </li>
