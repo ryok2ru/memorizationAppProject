@@ -8,6 +8,7 @@ import {
   createFolder,
   createWord,
   deleteFolder,
+  deleteFolders,
   deleteWord,
   deleteWords,
   ensureFsrsFields,
@@ -71,6 +72,29 @@ describe('folders', () => {
     expect(await db.words.count()).toBe(1);
     expect(await getWord(keep.id)).toBeDefined();
     expect(await db.reviewLogs.count()).toBe(0);
+  });
+
+  it('deleteFolders removes several folders with their words and logs, keeping the others', async () => {
+    const a = await createFolder('A', now);
+    const b = await createFolder('B', now);
+    const c = await createFolder('C', now);
+    const wa = await createWord({ folderId: a.id, englishTerm: 'a', japaneseDefinition: 'あ', memo: '' }, now);
+    const wb = await createWord({ folderId: b.id, englishTerm: 'b', japaneseDefinition: 'い', memo: '' }, now);
+    const wc = await createWord({ folderId: c.id, englishTerm: 'c', japaneseDefinition: 'う', memo: '' }, now);
+    for (const w of [wa, wb, wc]) {
+      const r = rate(w, 3, now);
+      await saveRating(r.word, r.log);
+    }
+    await deleteFolders([a.id, b.id]);
+    expect((await db.folders.toArray()).map((f) => f.id)).toEqual([c.id]);
+    expect((await db.words.toArray()).map((w) => w.id)).toEqual([wc.id]);
+    expect((await db.reviewLogs.toArray()).map((l) => l.wordId)).toEqual([wc.id]);
+  });
+
+  it('deleteFolders with no ids changes nothing', async () => {
+    await createFolder('A', now);
+    await deleteFolders([]);
+    expect(await db.folders.count()).toBe(1);
   });
 });
 

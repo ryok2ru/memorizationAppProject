@@ -53,13 +53,19 @@ export async function updateFolder(id: string, name: string, labels: Labels): Pr
 
 /** フォルダと配下の単語、その履歴を削除 */
 export async function deleteFolder(id: string): Promise<void> {
+  await deleteFolders([id]);
+}
+
+/** フォルダと配下の単語・ReviewLog をまとめて 1 トランザクションで削除する（7-2 の一括削除） */
+export async function deleteFolders(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
   await db.transaction('rw', db.folders, db.words, db.reviewLogs, async () => {
-    const wordIds = await db.words.where('folderId').equals(id).primaryKeys();
+    const wordIds = await db.words.where('folderId').anyOf(ids).primaryKeys();
     if (wordIds.length > 0) {
       await db.reviewLogs.where('wordId').anyOf(wordIds).delete();
       await db.words.bulkDelete(wordIds);
     }
-    await db.folders.delete(id);
+    await db.folders.bulkDelete(ids);
   });
 }
 

@@ -9,8 +9,9 @@ import { FolderDialog, type FolderDialogValue } from '../components/FolderDialog
 import { InfoSheet } from '../components/InfoSheet';
 import { SwipeRow } from '../components/SwipeRow';
 import { syncModal, useCloseOnOutside } from '../components/modal';
+import { allSelected, toggleAll } from '../components/selection';
 import { useAsync, isStandalone, errorMessage } from '../hooks';
-import { createFolder, deleteFolder, listAllWords, listFolders, setFavorite, updateFolder } from '../../db/repo';
+import { createFolder, deleteFolder, deleteFolders, listAllWords, listFolders, setFavorite, updateFolder } from '../../db/repo';
 import { loadOverview, loadScopeStats, type ScopeStats } from '../../app/stats';
 import { loadStreak, streakMessage } from '../../app/streak';
 import { loadSettings, requestPersistentStorage } from '../../app/settings';
@@ -23,6 +24,10 @@ import { folderLabels } from '../../domain/labels';
 
 /** 検索結果の表示上限。超えた分は絞り込みを促す */
 const MAX_RESULTS = 100;
+
+/** フォルダの一括削除の確認文（7-2）。cards は選んだフォルダの単語数の合計 */
+export const bulkDeleteFoldersMessage = (n: number, cards: number): string =>
+  `${n}件のフォルダと配下のカード${cards}枚、学習履歴をすべて削除します。よろしいですか？`;
 
 interface HomeData {
   folders: Folder[];
@@ -60,6 +65,9 @@ export function Home() {
   const [standalone] = useState(() => isStandalone());
   const [query, setQuery] = useState('');
   const [debounced, setDebounced] = useState('');
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [confirmBulk, setConfirmBulk] = useState(false);
 
   useEffect(() => {
     void updateBadge();
@@ -84,6 +92,44 @@ export function Home() {
       .sort((a, b) => a.englishTerm.localeCompare(b.englishTerm));
   }, [searching, allWords, debounced]);
   const folderName = (id: string) => data?.folders.find((f) => f.id === id)?.name ?? '';
+
+  // ---------- フォルダの複数選択と一括削除（7-2） ----------
+
+  const exitSelect = () => {
+    setSelecting(false);
+    setSelected(new Set());
+  };
+
+  // 検索を始めるとフォルダ一覧ごと隠れるので、選択モードも抜ける
+  useEffect(() => {
+    if (searching) exitSelect();
+  }, [searching]);
+
+  const toggleSelected = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const folderIds = useMemo(() => (data?.folders ?? []).map((f) => f.id), [data]);
+  const allFoldersSelected = allSelected(selected, folderIds);
+  /** 選んだフォルダの単語数の合計（確認文に出す） */
+  const selectedCards = [...selected].reduce((n, id) => n + (data?.stats[id]?.total ?? 0), 0);
+
+  const onBulkDelete = async () => {
+    setConfirmBulk(false);
+    const ids = [...selected];
+    try {
+      await deleteFolders(ids);
+      await updateBadge();
+      exitSelect();
+      reload();
+    } catch (e) {
+      setMessage(errorMessage(e));
+    }
+  };
 
   /** 検索結果の行の右スワイプでお気に入りを切り替える（7-2、7-3）。★ の件数が変わるのでホームの集計も読み直す */
   const swipeFavorite = async (word: Word) => {
@@ -148,8 +194,8 @@ export function Home() {
   const lastAt = settings?.lastNotifyScheduledAt ?? null;
 
   return (
-    <div className="screen">
-      {/* ホームだけタイトルを出さない。左に ⓘ とカレンダー、右に ＋ と歯車（7-2） */}
+    <div className={`screen${selecting ? ' has-fixed-bottom' : ''}`}>
+      {/* ホームだけタイトルを出さない。左に ⓘ とカレンダー、右に歯車（7-2）。フォルダの「＋」は「フォルダ」の見出し行に置く */}
       <Header
         left={
           <>
@@ -164,14 +210,9 @@ export function Home() {
           </>
         }
         right={
-          <>
-            <button type="button" className="btn-icon" aria-label="フォルダを追加" onClick={() => setAdding(true)}>
-              ＋
-            </button>
-            <Link to="/settings" className="btn btn-icon btn-icon-lg" aria-label="設定">
-              ⚙︎
-            </Link>
-          </>
+          <Link to="/settings" className="btn btn-icon btn-icon-lg" aria-label="設定">
+            ⚙︎
+          </Link>
         }
       />
 
@@ -245,9 +286,9 @@ export function Home() {
               </>
             )
           ) : (
-            <ul className="folder-list" aria-label="フォルダ一覧">
-              {/* 実体のないフォルダ。常に一番上に出し、「…」メニューは持たない（7-2） */}
-              <li className="folder-card favorites-card" data-testid="favorites-card">
+            <>
+              {/* 実体のないフォルダ。常に一番上に出し、「…」メニューも選択も持たない（7-2） */}
+              <div className="folder-card favorites-card" data-testid="favorites-card">
                 <Link to="/favorites" className="btn folder-main">
                   <span className="folder-icon" aria-hidden="true">
                     ★
@@ -259,36 +300,90 @@ export function Home() {
                     </span>
                   </span>
                 </Link>
-              </li>
-              {data.folders.map((f) => {
-                const s = data.stats[f.id] ?? { total: 0, due: 0 };
-                return (
-                  <li key={f.id} className="folder-card">
-                    <Link to={`/folders/${f.id}`} className="btn folder-main">
-                      <span className="folder-icon" aria-hidden="true">
-                        📁
-                      </span>
-                      <span className="row-text">
-                        <span className="row-title">{f.name}</span>
-                        <span className="row-sub">
-                          {s.total}枚 ・ 今日の復習 {s.due}枚
+              </div>
+
+              <section className="folder-section" aria-labelledby="folders-title">
+                {/* 見出し「フォルダ」の行。お気に入りとの区切りを兼ね、右端にフォルダの操作を置く（7-2） */}
+                <div className="folder-toolbar">
+                  <h2 id="folders-title">フォルダ</h2>
+                  {selecting ? (
+                    <>
+                      <button
+                        type="button"
+                        className="btn-text"
+                        onClick={() => setSelected((prev) => toggleAll(prev, folderIds))}
+                        data-testid="select-all-folders"
+                      >
+                        {allFoldersSelected ? '選択解除' : 'すべて選択'}
+                      </button>
+                      <button type="button" className="btn-text" onClick={exitSelect} style={{ fontWeight: 600 }}>
+                        完了
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button type="button" className="btn-icon" aria-label="フォルダを追加" onClick={() => setAdding(true)}>
+                        ＋
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-text"
+                        disabled={data.folders.length === 0}
+                        onClick={() => setSelecting(true)}
+                        data-testid="select-folders"
+                      >
+                        選択
+                      </button>
+                    </>
+                  )}
+                </div>
+                <ul className="folder-list" aria-label="フォルダ一覧">
+                  {data.folders.map((f) => {
+                    const s = data.stats[f.id] ?? { total: 0, due: 0 };
+                    const body = (
+                      <>
+                        <span className="folder-icon" aria-hidden="true">
+                          📁
                         </span>
-                      </span>
-                    </Link>
-                    <button type="button" className="btn-icon btn-menu" aria-label={`${f.name} のメニュー`} onClick={() => setMenuFolder(f)}>
-                      <span aria-hidden="true" />
-                      <span aria-hidden="true" />
-                      <span aria-hidden="true" />
-                    </button>
-                  </li>
-                );
-              })}
-              {data.folders.length === 0 && (
-                <li>
-                  <EmptyState message="フォルダがありません。＋で追加してください" />
-                </li>
-              )}
-            </ul>
+                        <span className="row-text">
+                          <span className="row-title">{f.name}</span>
+                          <span className="row-sub">
+                            {s.total}枚 ・ 今日の復習 {s.due}枚
+                          </span>
+                        </span>
+                      </>
+                    );
+                    return (
+                      <li key={f.id} className={`folder-card${selecting ? ' selecting' : ''}`}>
+                        {selecting ? (
+                          // 選択中はカード全体でチェックを切り替え、「…」は出さない
+                          <label className="btn folder-main select-row">
+                            <input type="checkbox" checked={selected.has(f.id)} onChange={() => toggleSelected(f.id)} aria-label={`${f.name} を選択`} />
+                            {body}
+                          </label>
+                        ) : (
+                          <>
+                            <Link to={`/folders/${f.id}`} className="btn folder-main">
+                              {body}
+                            </Link>
+                            <button type="button" className="btn-icon btn-menu" aria-label={`${f.name} のメニュー`} onClick={() => setMenuFolder(f)}>
+                              <span aria-hidden="true" />
+                              <span aria-hidden="true" />
+                              <span aria-hidden="true" />
+                            </button>
+                          </>
+                        )}
+                      </li>
+                    );
+                  })}
+                  {data.folders.length === 0 && (
+                    <li>
+                      <EmptyState message="フォルダがありません。＋で追加してください" />
+                    </li>
+                  )}
+                </ul>
+              </section>
+            </>
           )}
 
           {settings?.notifyEnabled && (
@@ -305,6 +400,14 @@ export function Home() {
             </div>
           )}
         </>
+      )}
+
+      {selecting && (
+        <div className="fixed-bottom">
+          <button type="button" className="btn-danger-solid" disabled={selected.size === 0} onClick={() => setConfirmBulk(true)} data-testid="bulk-delete-folders">
+            {selected.size}件を削除
+          </button>
+        </div>
       )}
 
       <FolderDialog
@@ -348,6 +451,16 @@ export function Home() {
         danger
         onConfirm={onDelete}
         onCancel={() => setDeleting(null)}
+      />
+
+      <ConfirmDialog
+        open={confirmBulk}
+        title="フォルダを削除"
+        message={bulkDeleteFoldersMessage(selected.size, selectedCards)}
+        confirmLabel="削除"
+        danger
+        onConfirm={() => void onBulkDelete()}
+        onCancel={() => setConfirmBulk(false)}
       />
     </div>
   );
