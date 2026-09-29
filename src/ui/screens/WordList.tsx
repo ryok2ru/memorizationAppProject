@@ -7,6 +7,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { SwipeRow } from '../components/SwipeRow';
 import { syncModal, useCloseOnOutside } from '../components/modal';
 import { useSheetDrag } from '../components/sheetDrag';
+import { allSelected, toggleAll } from '../components/selection';
 import { useAsync, errorMessage } from '../hooks';
 import {
   deleteWord,
@@ -300,6 +301,10 @@ export function WordList({ favorites = false }: { favorites?: boolean } = {}) {
     setSelected(new Set());
   };
 
+  /** 表示中の行（フィルター・検索の結果）。「すべて選択」の対象（7-3） */
+  const shownIds = useMemo(() => shown.map((w) => w.id), [shown]);
+  const allShownSelected = allSelected(selected, shownIds);
+
   /** 選択中の単語（削除・☆ の判定に使う） */
   const selectedWords = useMemo(() => words.filter((w) => selected.has(w.id)), [words, selected]);
   /** 選択中がすべて ★ なら「☆ を外す」、それ以外は「☆ を付ける」（7-3） */
@@ -371,7 +376,21 @@ export function WordList({ favorites = false }: { favorites?: boolean } = {}) {
     <div className="screen has-fixed-bottom">
       <Header
         title={favorites ? '★ お気に入り' : (data?.folder?.name ?? '')}
-        back="/"
+        // 選択モード中は「‹ 戻る」の位置に「すべて選択」を出す。表示中の行がすべて選ばれていれば「選択解除」（7-3）
+        back={selecting ? undefined : '/'}
+        left={
+          selecting && (
+            <button
+              type="button"
+              className="btn-text"
+              disabled={shownIds.length === 0}
+              onClick={() => setSelected((prev) => toggleAll(prev, shownIds))}
+              data-testid="select-all"
+            >
+              {allShownSelected ? '選択解除' : 'すべて選択'}
+            </button>
+          )
+        }
         right={
           selecting ? (
             <button type="button" className="btn-text" onClick={exitSelect} style={{ fontWeight: 600 }}>

@@ -400,6 +400,38 @@ button:disabled,
   color: var(--hard);
 }
 
+/* お気に入りの下のフォルダ群（7-2）。上に余白を足してお気に入りと区切り、見出し行と一覧を近づける */
+.folder-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+/* 見出し「フォルダ」と、右端の「＋」「選択」（選択中は「すべて選択」「完了」） */
+.folder-toolbar {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+}
+
+.folder-toolbar h2 {
+  flex: 1;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+/* 選択中は「…」が無いので、右の余白をお気に入りのカードとそろえる */
+.folder-card.selecting {
+  padding-right: 12px;
+}
+
+.folder-card.selecting .folder-main {
+  cursor: pointer;
+}
+
 /* 単語一覧: 区切り線のあるリスト行（7-3） */
 .word-list {
   list-style: none;
