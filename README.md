@@ -10,7 +10,6 @@ npm run dev       # 開発サーバー
 npm test          # ユニットテスト（vitest run）
 npm run build     # 型チェックとビルド（dist/）
 npm run preview   # ビルド結果の確認
-npm run icons     # public/ のアイコン PNG を再生成
 ```
 
 Node.js 20 以上。

@@ -788,7 +788,7 @@ Easy: 見た瞬間に分かった。間隔が最も長くなる。新しいカ�
 | theme_color | #2E5090 |
 | icons | `icons/icon-192.png`（192）、`icons/icon-512.png`（512）、`icons/icon-512-maskable.png`（512、purpose: maskable） |
 
-アイコンは単色背景に白の「V」を描いた PNG を生成して置く（ビルド時に生成しても、リポジトリに含めてもよい）。
+アイコンは砂時計と芽の絵（元画像は `docx/icon/IMG_9846.jpeg`）。元画像からアイコン本体を切り出し、背景を白（#FFFFFF）にした、角まで塗った不透明な正方形の PNG をリポジトリに含める（iOS が角を丸めるので、画像側では丸めない）。`apple-touch-icon.png`（180）、`icons/icon-192.png`、`icons/icon-512.png`、`icons/icon-512-maskable.png`（図柄を中央 84% に縮め、周りを白で埋めたもの）の 4 つ。
 
 ### 8-2. index.html の head
 
