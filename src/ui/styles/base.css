@@ -408,11 +408,25 @@ button:disabled,
   margin-top: 8px;
 }
 
-/* 見出し「フォルダ」と、右端の「＋」「選択」（選択中は「すべて選択」「完了」） */
+/* 見出し「フォルダ」と、右端の虫眼鏡・「＋」・「選択」（選択中は「すべて選択」「完了」、検索中は検索欄と「キャンセル」） */
 .folder-toolbar {
   display: flex;
   align-items: center;
   min-height: 44px;
+}
+
+/* 虫眼鏡で見出し行と置き換える検索欄と「キャンセル」（7-2） */
+.folder-search {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.folder-search .btn-text {
+  flex: none;
+  padding-right: 0;
 }
 
 .folder-toolbar h2 {
