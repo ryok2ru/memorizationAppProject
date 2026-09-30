@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { Link, useNavigate } from 'react-router-dom';
 import { Header } from '../components/Header';
 import { SummaryCard } from '../components/SummaryCard';
-import { StateBar } from '../components/StateBar';
 import { EmptyState } from '../components/EmptyState';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { FolderDialog, type FolderDialogValue } from '../components/FolderDialog';
@@ -20,7 +20,7 @@ import { finishToday, needsRefresh } from '../../app/notify';
 import { updateBadge } from '../../app/badge';
 import { validateFolderName } from '../../domain/validation';
 import { formatShortDateTime } from '../../domain/dates';
-import { FAVORITES, type Folder, type Word } from '../../domain/types';
+import { FAVORITES, LIMITS, type Folder, type Word } from '../../domain/types';
 import { folderLabels } from '../../domain/labels';
 
 /** 検索結果の表示上限。超えた分は絞り込みを促す */
@@ -29,6 +29,19 @@ const MAX_RESULTS = 100;
 /** フォルダの一括削除の確認文（7-2）。cards は選んだフォルダの単語数の合計 */
 export const bulkDeleteFoldersMessage = (n: number, cards: number): string =>
   `${n}件のフォルダと配下のカード${cards}枚、学習履歴をすべて削除します。よろしいですか？`;
+
+/**
+ * フォルダの複製ダイアログの名前の初期値（7-2）。「元の名前のコピー」、それもあれば「元の名前のコピー 2」「… 3」と空いている番号を付ける。
+ * 重複の判定は validateFolderName と同じく大文字小文字を無視する。50 文字を超えるときは元の名前の末尾を削る
+ */
+export function copyFolderName(name: string, existingNames: string[]): string {
+  const taken = new Set(existingNames.map((e) => e.trim().toLowerCase()));
+  for (let n = 1; ; n++) {
+    const suffix = n === 1 ? 'のコピー' : `のコピー ${n}`;
+    const candidate = name.trim().slice(0, LIMITS.folderName - suffix.length).trimEnd() + suffix;
+    if (!taken.has(candidate.toLowerCase())) return candidate;
+  }
+}
 
 interface HomeData {
   folders: Folder[];
@@ -60,10 +73,14 @@ export function Home() {
   const [adding, setAdding] = useState(false);
   const [menuFolder, setMenuFolder] = useState<Folder | null>(null);
   const [editing, setEditing] = useState<Folder | null>(null);
+  const [copying, setCopying] = useState<Folder | null>(null);
   const [deleting, setDeleting] = useState<Folder | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [info, setInfo] = useState(false);
   const [standalone] = useState(() => isStandalone());
+  /** フォルダの見出し行を検索欄に置き換えているか（7-2） */
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState('');
   const [debounced, setDebounced] = useState('');
   const [selecting, setSelecting] = useState(false);
@@ -97,17 +114,25 @@ export function Home() {
   }, [searching, allWords, debounced]);
   const folderName = (id: string) => data?.folders.find((f) => f.id === id)?.name ?? '';
 
+  // iOS はタップの処理の中でフォーカスしないとキーボードを出さないので、検索欄を同期で描いてからフォーカスする
+  const openSearch = () => {
+    flushSync(() => setSearchOpen(true));
+    searchRef.current?.focus();
+  };
+
+  // 入力を消して見出し行に戻す。300ms 待たずにフォルダ一覧へ戻すため、遅延後の値もすぐ空にする
+  const closeSearch = () => {
+    setSearchOpen(false);
+    setQuery('');
+    setDebounced('');
+  };
+
   // ---------- フォルダの複数選択と一括削除（7-2） ----------
 
   const exitSelect = () => {
     setSelecting(false);
     setSelected(new Set());
   };
-
-  // 検索を始めるとフォルダ一覧ごと隠れるので、選択モードも抜ける
-  useEffect(() => {
-    if (searching) exitSelect();
-  }, [searching]);
 
   const toggleSelected = (id: string) =>
     setSelected((prev) => {
@@ -194,6 +219,17 @@ export function Home() {
     }
   };
 
+  const onCopy = async ({ name, labels }: FolderDialogValue) => {
+    setCopying(null);
+    requestPersistentStorage();
+    try {
+      await createFolder(name, Date.now(), labels);
+      reload();
+    } catch (e) {
+      setMessage(errorMessage(e));
+    }
+  };
+
   const onDelete = async () => {
     if (!deleting) return;
     const id = deleting.id;
@@ -255,19 +291,9 @@ export function Home() {
         </div>
       )}
 
-      <input
-        type="search"
-        placeholder="全フォルダから検索"
-        aria-label="全フォルダから検索"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-      />
-
       {data && (
         <>
-          {/* 上から状態別割合、ストリーク、サマリーカード（7-2） */}
-          <StateBar counts={data.overview.byState} />
-
+          {/* 上からストリーク、サマリーカード（7-2） */}
           <div className="center" data-testid="streak">
             {streakMessage(data.streak)}
           </div>
@@ -279,63 +305,52 @@ export function Home() {
             onStartNew={() => navigate('/study/select?scope=all')}
           />
 
-          {searching ? (
-            allWords == null ? null : results.length === 0 ? (
-              <EmptyState message="該当するカードがありません" />
-            ) : (
-              <>
-                <div className="small muted center" data-testid="search-count">
-                  {results.length > MAX_RESULTS ? `${results.length}件中${MAX_RESULTS}件を表示。さらに絞り込んでください` : `${results.length}件`}
-                </div>
-                <ul className="word-list" aria-label="検索結果">
-                  {results.slice(0, MAX_RESULTS).map((w) => (
-                    <li key={w.id} className="word-row">
-                      {/* 右スワイプでお気に入りを切り替える。削除は単語一覧だけなので左スワイプは渡さない（7-3） */}
-                      <SwipeRow onFavorite={() => void swipeFavorite(w)} favorite={w.favorite}>
-                        <Link to={`/words/${w.id}`} className="btn word-row-main">
-                          {/* 一覧と同じ ★ の表示（7-2、7-3） */}
-                          <span
-                            className={`row-star${w.favorite ? ' on' : ''}`}
-                            role={w.favorite ? 'img' : undefined}
-                            aria-label={w.favorite ? 'お気に入り' : undefined}
-                          >
-                            {w.favorite ? '★' : ''}
-                          </span>
-                          <span className="row-text">
-                            <span className="row-title">{w.englishTerm}</span>
-                            <span className="row-sub">{w.japaneseDefinition}</span>
-                          </span>
-                          <span className="row-side">{folderName(w.folderId)}</span>
-                        </Link>
-                      </SwipeRow>
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )
-          ) : (
-            <>
-              {/* 実体のないフォルダ。★ 付きが 1 件以上のときだけ一番上に出し、「…」メニューも選択も持たない（7-2） */}
-              {data.favorites.total > 0 && (
-                <div className="folder-card favorites-card" data-testid="favorites-card">
-                  <Link to="/favorites" className="btn folder-main">
-                    <span className="folder-icon" aria-hidden="true">
-                      ★
-                    </span>
-                    <span className="row-text">
-                      <span className="row-title">お気に入り</span>
-                      <span className="row-sub">
-                        {data.favorites.total}枚 ・ 今日の復習 {data.favorites.due}枚
-                      </span>
-                    </span>
-                  </Link>
-                </div>
-              )}
+          {/* 実体のないフォルダ。★ 付きが 1 件以上のときだけフォルダの上に出し、「…」メニューも選択も持たない。検索中も出したままにする（7-2） */}
+          {data.favorites.total > 0 && (
+            <div className="folder-card favorites-card" data-testid="favorites-card">
+              <Link to="/favorites" className="btn folder-main">
+                <span className="folder-icon" aria-hidden="true">
+                  ★
+                </span>
+                <span className="row-text">
+                  <span className="row-title">お気に入り</span>
+                  <span className="row-sub">
+                    {data.favorites.total}枚 ・ 今日の復習 {data.favorites.due}枚
+                  </span>
+                </span>
+              </Link>
+            </div>
+          )}
 
-              <section className="folder-section" aria-labelledby="folders-title">
-                {/* 見出し「フォルダ」の行。お気に入りとの区切りを兼ね、右端にフォルダの操作を置く（7-2） */}
-                <div className="folder-toolbar">
-                  <h2 id="folders-title">フォルダ</h2>
+          <section className="folder-section" aria-label={searchOpen ? '全フォルダから検索' : 'フォルダ'}>
+            {/* 見出し「フォルダ」の行。お気に入りとの区切りを兼ね、右端にフォルダの操作を置く。虫眼鏡を押すと行ごと検索欄に変わる（7-2） */}
+            <div className="folder-toolbar">
+              {searchOpen ? (
+                <form
+                  role="search"
+                  className="folder-search"
+                  onSubmit={(e) => {
+                    // キーボードの「検索」でキーボードを閉じ、結果を見やすくする
+                    e.preventDefault();
+                    searchRef.current?.blur();
+                  }}
+                >
+                  <input
+                    ref={searchRef}
+                    type="search"
+                    enterKeyHint="search"
+                    placeholder="全フォルダから検索"
+                    aria-label="全フォルダから検索"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                  />
+                  <button type="button" className="btn-text" onClick={closeSearch} data-testid="close-search">
+                    キャンセル
+                  </button>
+                </form>
+              ) : (
+                <>
+                  <h2>フォルダ</h2>
                   {selecting ? (
                     <>
                       <button
@@ -352,6 +367,10 @@ export function Home() {
                     </>
                   ) : (
                     <>
+                      {/* 虫眼鏡はカレンダーと同じ 22px の線の図形（7-2） */}
+                      <button type="button" className="btn-icon" aria-label="全フォルダから検索" onClick={openSearch} data-testid="open-search">
+                        <SearchIcon />
+                      </button>
                       <button type="button" className="btn-icon" aria-label="フォルダを追加" onClick={() => setAdding(true)}>
                         ＋
                       </button>
@@ -366,63 +385,100 @@ export function Home() {
                       </button>
                     </>
                   )}
-                </div>
-                <ul ref={listRef} className={`folder-list${reorder.dragging ? ' reordering' : ''}`} aria-label="フォルダ一覧">
-                  {folders.map((f, i) => {
-                    const s = data.stats[f.id] ?? { total: 0, due: 0 };
-                    const body = (
-                      <>
-                        <span className="folder-icon" aria-hidden="true">
-                          📁
-                        </span>
-                        <span className="row-text">
-                          <span className="row-title">{f.name}</span>
-                          <span className="row-sub">
-                            {s.total}枚 ・ 今日の復習 {s.due}枚
-                          </span>
-                        </span>
-                      </>
-                    );
-                    const item = reorder.itemProps(i);
-                    return (
-                      <li key={f.id} className={`folder-card${selecting ? ' selecting' : ''}${item.className}`} style={item.style}>
-                        {selecting ? (
-                          // 選択中はカード全体でチェックを切り替え、「…」の代わりに並べ替えのつまみ（≡）を出す
-                          <>
-                            <label className="btn folder-main select-row">
-                              <input type="checkbox" checked={selected.has(f.id)} onChange={() => toggleSelected(f.id)} aria-label={`${f.name} を選択`} />
-                              {body}
-                            </label>
-                            <button type="button" className="btn-icon btn-grip" aria-label={`${f.name} を並べ替え`} {...reorder.handleProps(i)}>
-                              <span aria-hidden="true" />
-                              <span aria-hidden="true" />
-                              <span aria-hidden="true" />
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            <Link to={`/folders/${f.id}`} className="btn folder-main">
-                              {body}
-                            </Link>
-                            <button type="button" className="btn-icon btn-menu" aria-label={`${f.name} のメニュー`} onClick={() => setMenuFolder(f)}>
-                              <span aria-hidden="true" />
-                              <span aria-hidden="true" />
-                              <span aria-hidden="true" />
-                            </button>
-                          </>
-                        )}
+                </>
+              )}
+            </div>
+
+            {searching ? (
+              allWords == null ? null : results.length === 0 ? (
+                <EmptyState message="該当するカードがありません" />
+              ) : (
+                <>
+                  <div className="small muted center" data-testid="search-count">
+                    {results.length > MAX_RESULTS ? `${results.length}件中${MAX_RESULTS}件を表示。さらに絞り込んでください` : `${results.length}件`}
+                  </div>
+                  <ul className="word-list" aria-label="検索結果">
+                    {results.slice(0, MAX_RESULTS).map((w) => (
+                      <li key={w.id} className="word-row">
+                        {/* 右スワイプでお気に入りを切り替える。削除は単語一覧だけなので左スワイプは渡さない（7-3） */}
+                        <SwipeRow onFavorite={() => void swipeFavorite(w)} favorite={w.favorite}>
+                          <Link to={`/words/${w.id}`} className="btn word-row-main">
+                            {/* 一覧と同じ ★ の表示（7-2、7-3） */}
+                            <span
+                              className={`row-star${w.favorite ? ' on' : ''}`}
+                              role={w.favorite ? 'img' : undefined}
+                              aria-label={w.favorite ? 'お気に入り' : undefined}
+                            >
+                              {w.favorite ? '★' : ''}
+                            </span>
+                            <span className="row-text">
+                              <span className="row-title">{w.englishTerm}</span>
+                              <span className="row-sub">{w.japaneseDefinition}</span>
+                            </span>
+                            <span className="row-side">{folderName(w.folderId)}</span>
+                          </Link>
+                        </SwipeRow>
                       </li>
-                    );
-                  })}
-                  {folders.length === 0 && (
-                    <li>
-                      <EmptyState message="フォルダがありません。＋で追加してください" />
+                    ))}
+                  </ul>
+                </>
+              )
+            ) : (
+              <ul ref={listRef} className={`folder-list${reorder.dragging ? ' reordering' : ''}`} aria-label="フォルダ一覧">
+                {folders.map((f, i) => {
+                  const s = data.stats[f.id] ?? { total: 0, due: 0 };
+                  const body = (
+                    <>
+                      <span className="folder-icon" aria-hidden="true">
+                        📁
+                      </span>
+                      <span className="row-text">
+                        <span className="row-title">{f.name}</span>
+                        <span className="row-sub">
+                          {s.total}枚 ・ 今日の復習 {s.due}枚
+                        </span>
+                      </span>
+                    </>
+                  );
+                  const item = reorder.itemProps(i);
+                  return (
+                    <li key={f.id} className={`folder-card${selecting ? ' selecting' : ''}${item.className}`} style={item.style}>
+                      {selecting ? (
+                        // 選択中はカード全体でチェックを切り替え、「…」の代わりに並べ替えのつまみ（≡）を出す
+                        <>
+                          <label className="btn folder-main select-row">
+                            <input type="checkbox" checked={selected.has(f.id)} onChange={() => toggleSelected(f.id)} aria-label={`${f.name} を選択`} />
+                            {body}
+                          </label>
+                          <button type="button" className="btn-icon btn-grip" aria-label={`${f.name} を並べ替え`} {...reorder.handleProps(i)}>
+                            <span aria-hidden="true" />
+                            <span aria-hidden="true" />
+                            <span aria-hidden="true" />
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <Link to={`/folders/${f.id}`} className="btn folder-main">
+                            {body}
+                          </Link>
+                          <button type="button" className="btn-icon btn-menu" aria-label={`${f.name} のメニュー`} onClick={() => setMenuFolder(f)}>
+                            <span aria-hidden="true" />
+                            <span aria-hidden="true" />
+                            <span aria-hidden="true" />
+                          </button>
+                        </>
+                      )}
                     </li>
-                  )}
-                </ul>
-              </section>
-            </>
-          )}
+                  );
+                })}
+                {folders.length === 0 && (
+                  <li>
+                    <EmptyState message="フォルダがありません。＋で追加してください" />
+                  </li>
+                )}
+              </ul>
+            )}
+          </section>
 
           {settings?.notifyEnabled && (
             <div className="card" style={{ gap: 8, display: 'flex', flexDirection: 'column' }}>
@@ -466,11 +522,26 @@ export function Home() {
         onCancel={() => setEditing(null)}
       />
 
+      {/* 複製はフォルダ名と項目名だけ。初期値は「元の名前のコピー」と元の項目名で、カードは写さない（7-2） */}
+      <FolderDialog
+        open={copying != null}
+        title="フォルダを複製"
+        confirmLabel="複製"
+        initial={copying ? { name: copyFolderName(copying.name, existingNames()), labels: folderLabels(copying) } : undefined}
+        validateName={(v) => validateFolderName(v, existingNames())}
+        onConfirm={(v) => void onCopy(v)}
+        onCancel={() => setCopying(null)}
+      />
+
       <FolderMenu
         folder={menuFolder}
         onClose={() => setMenuFolder(null)}
         onEdit={() => {
           setEditing(menuFolder);
+          setMenuFolder(null);
+        }}
+        onCopy={() => {
+          setCopying(menuFolder);
           setMenuFolder(null);
         }}
         onDelete={() => {
@@ -508,11 +579,13 @@ function FolderMenu({
   folder,
   onClose,
   onEdit,
+  onCopy,
   onDelete,
 }: {
   folder: Folder | null;
   onClose: () => void;
   onEdit: () => void;
+  onCopy: () => void;
   onDelete: () => void;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
@@ -537,6 +610,9 @@ function FolderMenu({
         <button type="button" className="btn-outline" onClick={onEdit}>
           フォルダを編集
         </button>
+        <button type="button" className="btn-outline" onClick={onCopy}>
+          フォルダを複製
+        </button>
         <button type="button" className="btn-outline-danger" onClick={onDelete}>
           削除
         </button>
@@ -554,6 +630,16 @@ function CalendarIcon() {
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
       <rect x="3" y="5" width="18" height="16" rx="2.5" />
       <path d="M3 10h18M8 3v4M16 3v4" />
+    </svg>
+  );
+}
+
+/** 虫眼鏡のアイコン（7-2）。カレンダーと同じ 22px の正方形に、同じ太さの文字色（--accent）の線で描く */
+function SearchIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+      <circle cx="10.5" cy="10.5" r="6.5" />
+      <path d="M15.5 15.5 20 20" />
     </svg>
   );
 }
