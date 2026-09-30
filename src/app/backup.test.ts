@@ -5,6 +5,7 @@ import {
   SUPPORTED_SCHEMA_VERSIONS,
   backupFileName,
   exportBackup,
+  exportResultMessage,
   importBackup,
   parseBackup,
 } from './backup';
@@ -114,5 +115,16 @@ describe('backup', () => {
     expect(() => parseBackup(JSON.stringify({ app: 'Memoraq', schemaVersion: 2, folders: [] }))).toThrow(BackupFormatError);
     expect(() => parseBackup(JSON.stringify({ app: 'Memoraq', schemaVersion: 2, folders: [], words: [], reviewLogs: [] }))).not.toThrow();
     expect(backupFileName(new Date(2026, 0, 1, 0, 0).getTime())).toBe('memoraq-backup-20260101-0000.json');
+  });
+});
+
+describe('exportResultMessage', () => {
+  it('共有シートで完了したときとダウンロードしたときはファイル名を出す', () => {
+    expect(exportResultMessage('shared', 'memoraq-backup-20260918-0905.json')).toBe('memoraq-backup-20260918-0905.json を書き出しました');
+    expect(exportResultMessage('downloaded', 'a.json')).toBe('a.json を書き出しました');
+  });
+
+  it('共有シートを閉じただけのときは何も出さない', () => {
+    expect(exportResultMessage('cancelled', 'a.json')).toBeNull();
   });
 });

@@ -94,8 +94,11 @@ export async function importBackup(backup: Backup): Promise<void> {
   });
 }
 
+/** 書き出しの結果。shared = 共有シートで何かを選んで完了、cancelled = 共有シートを閉じた、downloaded = <a download> で保存 */
+export type SaveResult = 'shared' | 'cancelled' | 'downloaded';
+
 /** 共有シートか <a download> で保存する（10-2） */
-export async function saveBackupFile(text: string, fileName: string): Promise<'share' | 'download'> {
+export async function saveBackupFile(text: string, fileName: string): Promise<SaveResult> {
   const file = new File([text], fileName, { type: 'application/json' });
   const nav = navigator as Navigator & {
     canShare?: (data: ShareData) => boolean;
@@ -104,9 +107,9 @@ export async function saveBackupFile(text: string, fileName: string): Promise<'s
   if (nav.canShare?.({ files: [file] }) && nav.share) {
     try {
       await nav.share({ files: [file], title: fileName });
-      return 'share';
+      return 'shared';
     } catch (e) {
-      if ((e as { name?: string }).name === 'AbortError') return 'share';
+      if ((e as { name?: string }).name === 'AbortError') return 'cancelled';
       // 共有に失敗したらダウンロードにフォールバック
     }
   }
@@ -118,5 +121,11 @@ export async function saveBackupFile(text: string, fileName: string): Promise<'s
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
-  return 'download';
+  return 'downloaded';
+}
+
+/** 書き出し後に設定画面に出す文（10-2）。共有シートを閉じただけのときは何も出さない */
+export function exportResultMessage(result: SaveResult, fileName: string): string | null {
+  if (result === 'cancelled') return null;
+  return `${fileName} を書き出しました`;
 }

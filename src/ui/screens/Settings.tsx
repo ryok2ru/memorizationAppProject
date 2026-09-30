@@ -8,8 +8,8 @@ import { useAsync, errorMessage } from '../hooks';
 import { useSw } from '../SwContext';
 import { listFolders, resetProgress } from '../../db/repo';
 import { loadSettings, updateSettings, MAX_CARDS_OPTIONS } from '../../app/settings';
-import { exportBackup, importBackup, parseBackup, saveBackupFile, BackupFormatError, type Backup } from '../../app/backup';
-import { updateBadge } from '../../app/badge';
+import { exportBackup, exportResultMessage, importBackup, parseBackup, saveBackupFile, BackupFormatError, type Backup } from '../../app/backup';
+import { badgePermission, requestBadgePermission, updateBadge, type BadgePermission } from '../../app/badge';
 import { calendarStartLabel } from '../../app/calendar';
 import { formatShortDateTime } from '../../domain/dates';
 import type { Settings as SettingsType } from '../../domain/types';
@@ -43,6 +43,7 @@ export function Settings() {
   const [confirmReset, setConfirmReset] = useState(false);
   const [confirmCalendarReset, setConfirmCalendarReset] = useState(false);
   const [info, setInfo] = useState(false);
+  const [badgePerm, setBadgePerm] = useState<BadgePermission>(() => badgePermission());
   const fileRef = useRef<HTMLInputElement>(null);
 
   const save = async (patch: Partial<SettingsType>) => {
@@ -57,11 +58,15 @@ export function Settings() {
   const onExport = async () => {
     try {
       const { text, fileName } = await exportBackup();
-      const how = await saveBackupFile(text, fileName);
-      setMessage(how === 'share' ? '共有シートから保存してください' : `${fileName} を保存しました`);
+      setMessage(exportResultMessage(await saveBackupFile(text, fileName), fileName));
     } catch (e) {
       setMessage(errorMessage(e));
     }
+  };
+
+  /** 8-7: iOS はバッジに通知の許可が要る。ボタンを押したときだけ許可を求める */
+  const onAllowBadge = async () => {
+    setBadgePerm(await requestBadgePermission());
   };
 
   const onPickBackup = async (file: File | undefined) => {
@@ -178,6 +183,29 @@ export function Settings() {
             通知はホームか結果画面の「今日の学習を終える」で iOS の Shortcuts に渡し、リマインダーに予約します。
             アプリバッジの復習数はアプリを開いたときにだけ更新され、バックグラウンドでは変わりません。
           </p>
+          {badgePerm !== 'unsupported' && (
+            <>
+              <div className="setting-row">
+                <span>アプリバッジ</span>
+                {badgePerm === 'default' ? (
+                  <button type="button" className="btn-text" onClick={() => void onAllowBadge()} data-testid="allow-badge">
+                    許可する
+                  </button>
+                ) : (
+                  <span className="muted" style={{ flex: 'none' }} data-testid="badge-permission">
+                    {badgePerm === 'granted' ? '許可済み' : '許可されていません'}
+                  </span>
+                )}
+              </div>
+              {badgePerm !== 'granted' && (
+                <p className="small muted" style={{ margin: 0 }}>
+                  {badgePerm === 'default'
+                    ? 'アイコンに復習数を出すには通知の許可が要ります。iOS には「通知を送信します」と表示されますが、このアプリは通知を送らず、アイコンの数字だけに使います。'
+                    : 'iPhone の「設定」→「通知」→「Memoraq」で通知とバッジを許可すると、アイコンに復習数が出ます。'}
+                </p>
+              )}
+            </>
+          )}
           <details>
             <summary>Shortcut の設定方法</summary>
             <p className="small">事前準備: リマインダーアプリでリスト「Memoraq」を作る。</p>
