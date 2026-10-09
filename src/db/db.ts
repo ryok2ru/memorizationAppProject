@@ -1,5 +1,5 @@
 import Dexie, { type EntityTable } from 'dexie';
-import type { Folder, Word, ReviewLog, Settings } from '../domain/types';
+import type { Folder, Word, ReviewLog, Settings, WordImage } from '../domain/types';
 import { LEGACY_LABELS } from '../domain/labels';
 
 /** 旧名 'vocavault' の DB からは引き継がない（4-7） */
@@ -10,6 +10,7 @@ export const db = new Dexie(DB_NAME) as Dexie & {
   words: EntityTable<Word, 'id'>;
   reviewLogs: EntityTable<ReviewLog, 'id'>;
   settings: EntityTable<Settings, 'id'>;
+  images: EntityTable<WordImage, 'wordId'>;
 };
 
 db.version(1).stores({
@@ -88,3 +89,15 @@ db.version(5)
         f.backLabel = LEGACY_LABELS.back;
       }),
   );
+
+/**
+ * v6: カードの画像のテーブル images を足す（4-1、4-8、4-7）。主キーは wordId（1 枚のカードに 1 枚まで）。
+ * 既存のテーブルとレコードは変えないので upgrade は要らない。
+ */
+db.version(6).stores({
+  folders: 'id, sortOrder',
+  words: 'id, folderId, due, state, [folderId+due], [folderId+state]',
+  reviewLogs: 'id, wordId, review',
+  settings: 'id',
+  images: 'wordId',
+});

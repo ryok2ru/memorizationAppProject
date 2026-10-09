@@ -4,7 +4,8 @@ import { ProgressBar } from '../components/ProgressBar';
 import { QuitSheet } from '../components/QuitSheet';
 import { FavoriteButton } from '../components/FavoriteButton';
 import { useStudy } from '../useStudy';
-import { useAsync } from '../hooks';
+import { useAsync, useWordImage } from '../hooks';
+import { imageVisible } from '../../app/image';
 import { listFolders } from '../../db/repo';
 import { labelsForScope } from '../../domain/labels';
 import { checkEn, checkJa, splitCandidates } from '../../domain/normalize';
@@ -19,6 +20,7 @@ export function Typing() {
   const [judged, setJudged] = useState<'ok' | 'ng' | null>(null);
   const [confirmQuit, setConfirmQuit] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const image = useWordImage(word?.id);
   // enToJa = 表を見て裏を答える、jaToEn = 裏を見て表を答える（6-4）
   const enToJa = session?.mode === 'enToJa';
   // 見出しと入力欄の案内は、モード選択と同じく対象範囲の項目名（7-6）。読み込むまでは空にして、表記が切り替わって見えないようにする
@@ -94,6 +96,10 @@ export function Typing() {
       {word && (
         <>
           <div className="card center" data-testid="typing-prompt">
+            {/* 画像は付けた側の文字と一緒に出す。出題中は出題の面だけ、判定後は答えも出ているので両方（6-4） */}
+            {image && imageVisible(image.side, { front: enToJa || !!judged, back: !enToJa || !!judged }) && (
+              <img className="card-image" src={image.url} alt="カードの画像" draggable={false} data-testid="card-image" />
+            )}
             <div className="study-term">{prompt}</div>
             {word.memo && judged && <div className="study-memo">{word.memo}</div>}
           </div>

@@ -604,7 +604,8 @@ label.field {
   gap: 6px;
 }
 
-label.field > span:first-child {
+label.field > span:first-child,
+.image-field > span:first-child {
   font-size: 14px;
   color: var(--muted);
 }
@@ -1337,6 +1338,39 @@ dialog.sheet.sheet-slide::backdrop {
   color: var(--muted);
   white-space: pre-wrap;
   font-size: 15px;
+}
+
+/* カードの画像（4-8、6-4）。カードの中に収まるよう高さを抑え、縦横比は保つ。
+   指の操作はカードのスワイプに任せ、長押しで iOS の画像メニューが出ないようにする */
+.card-image {
+  display: block;
+  max-width: 100%;
+  max-height: 30dvh;
+  min-height: 0;
+  margin: 0 auto;
+  object-fit: contain;
+  border-radius: 8px;
+  flex: none;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.card .card-image {
+  margin-bottom: 8px;
+}
+
+/* 単語フォームの画像欄（7-4） */
+.image-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.image-field .card-image {
+  max-height: 200px;
+  margin: 0;
 }
 
 .grade-buttons {

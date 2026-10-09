@@ -53,6 +53,22 @@ export interface Word extends FsrsFields {
   updatedAt: number;
 }
 
+/** 画像を表示する面。表（englishTerm）か裏（japaneseDefinition）と一緒に出す（4-8） */
+export type ImageSide = 'front' | 'back';
+
+/**
+ * カードの画像（4-8）。1 枚のカードに 1 枚まで。主キーは wordId。
+ * 画像は縮小した JPEG のバイト列で持つ（Blob ではなく ArrayBuffer。iOS Safari の IndexedDB で Blob の扱いに不具合があった版があるため）
+ */
+export interface WordImage {
+  wordId: string;
+  data: ArrayBuffer;
+  /** MIME タイプ（縮小後は image/jpeg） */
+  type: string;
+  side: ImageSide;
+  updatedAt: number;
+}
+
 export interface ReviewLog {
   id: string;
   wordId: string;
@@ -112,6 +128,8 @@ export const LIMITS = {
   folderName: 50,
   folderLabel: 20,
   masteredStability: 30,
+  /** 画像の縮小後の長辺（px）（4-8） */
+  imageMaxSide: 1280,
 } as const;
 
 export const GRADES: readonly Grade[] = [1, 2, 3, 4];

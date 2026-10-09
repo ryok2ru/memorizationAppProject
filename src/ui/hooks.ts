@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import { getSession, subscribeSession } from '../app/session';
+import { getWordImage } from '../db/repo';
+import type { ImageSide } from '../domain/types';
 
 export function useSession() {
   return useSyncExternalStore(subscribeSession, getSession, getSession);
@@ -40,4 +42,30 @@ export function errorMessage(e: unknown): string {
   const inner = (e as { inner?: { name?: string } } | null)?.inner?.name ?? '';
   if (name === 'QuotaExceededError' || inner === 'QuotaExceededError') return '端末の空き容量が不足しています';
   return '保存に失敗しました';
+}
+
+/**
+ * カードの画像（4-8）を表示用の object URL で返す。画像が無い、または読み込み中なら null。
+ * 前のカードの画像が一瞬でも残らないよう、読み込んだ wordId が今の wordId と一致するときだけ返す
+ */
+export function useWordImage(wordId: string | undefined): { url: string; side: ImageSide } | null {
+  const [loaded, setLoaded] = useState<{ wordId: string; url: string; side: ImageSide } | null>(null);
+  useEffect(() => {
+    if (!wordId) return undefined;
+    let alive = true;
+    let url: string | null = null;
+    getWordImage(wordId).then(
+      (img) => {
+        if (!alive || !img) return;
+        url = URL.createObjectURL(new Blob([img.data], { type: img.type }));
+        setLoaded({ wordId, url, side: img.side });
+      },
+      (e) => console.error(e),
+    );
+    return () => {
+      alive = false;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [wordId]);
+  return loaded && loaded.wordId === wordId ? { url: loaded.url, side: loaded.side } : null;
 }

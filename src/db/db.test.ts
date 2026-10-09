@@ -6,7 +6,7 @@ import { DB_NAME, db } from './db';
 const V2_WORDS = 'id, folderId, due, state, favorite, [folderId+due], [folderId+state], [favorite+due]';
 
 describe('Dexie のスキーマ（4-6、4-7）', () => {
-  it('v2 の DB を v5 で開くと、v3 でインデックス宣言だけが減ってレコードは残り、v4 で設定に calendarStartDate = null、v5 でフォルダに英単語・日本語訳の項目名が入る', async () => {
+  it('v2 の DB を最新（v6）で開くと、v3 でインデックス宣言だけが減ってレコードは残り、v4 で設定に calendarStartDate = null、v5 でフォルダに英単語・日本語訳の項目名が入り、v6 で画像のテーブルが加わる', async () => {
     const old = new Dexie(DB_NAME);
     old.version(2).stores({
       folders: 'id, sortOrder',
@@ -21,7 +21,7 @@ describe('Dexie のスキーマ（4-6、4-7）', () => {
     old.close();
 
     await db.open();
-    expect(db.verno).toBe(5);
+    expect(db.verno).toBe(6);
     // 真偽値は IndexedDB のキーに使えず検索に効かないので、favorite と [favorite+due] は宣言しない
     expect(db.words.schema.indexes.map((i) => i.name)).toEqual(['folderId', 'due', 'state', '[folderId+due]', '[folderId+state]']);
     // upgrade でのデータ変換は無い。★ はそのまま残る
@@ -30,5 +30,8 @@ describe('Dexie のスキーマ（4-6、4-7）', () => {
     expect(await db.settings.get('app')).toEqual({ id: 'app', maxCardsPerSession: 40, calendarStartDate: null });
     // v5: 既存のフォルダは英単語帳として作られたので「英単語」「日本語訳」。他の項目はそのまま
     expect(await db.folders.get('f')).toEqual({ id: 'f', name: 'TOEIC', createdAt: 1, sortOrder: 0, frontLabel: '英単語', backLabel: '日本語訳' });
+    // v6: 画像のテーブルが空で加わる。主キーは wordId
+    expect(db.images.schema.primKey.name).toBe('wordId');
+    expect(await db.images.count()).toBe(0);
   });
 });
