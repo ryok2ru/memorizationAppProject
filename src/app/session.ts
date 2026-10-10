@@ -1,5 +1,5 @@
 import type { Grade, Word, ReviewLog, FsrsFields, Scope } from '../domain/types';
-import { rate as fsrsRate, isFinitePayload, isShortTermState, FSRS_KEYS } from '../domain/fsrs';
+import { rate as fsrsRate, isFinitePayload, requeuesInSession, FSRS_KEYS } from '../domain/fsrs';
 import { saveRating, revertRating, revertRatings } from '../db/repo';
 import type { SessionKind } from './queue';
 
@@ -94,7 +94,7 @@ export function applyRating(
     ...s.items,
     [wordId]: { ...item, firstRating: item.firstRating ?? grade },
   };
-  const requeued = isShortTermState(updated.state);
+  const requeued = requeuesInSession(grade, updated.state);
   const queue = requeued ? [...s.queue, wordId] : s.queue;
   const index = s.index + 1;
   const entry: UndoEntry = {

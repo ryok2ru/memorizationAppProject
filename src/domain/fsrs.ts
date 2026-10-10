@@ -15,8 +15,8 @@ export const scheduler = fsrs(
     enable_fuzz: false,
     enable_short_term: true,
     // ts-fsrs 5.4 では New に Good で「次のステップ」に進むため、1 段だと
-    // 直接 Review に進む。2 段にすると Good で 10 分後に再出題され、次の Good で
-    // Review に進む（設計書 5-2）。
+    // 直接 Review に進む。2 段にすると Good で Learning（10 分後が期限）になり、
+    // 今日の復習でもう一度 Good を押すと Review に進む（設計書 5-2）。
     learning_steps: ['10m', '10m'],
     relearning_steps: ['10m'],
   }),
@@ -114,20 +114,25 @@ export function rate(word: Word, grade: Grade, now: number): { word: Word; log: 
 
 export interface PreviewItem {
   due: number;
-  /** 更新後の state が 1 か 3。10 分ステップで当日中に再出題される（6-3 の再出題条件と同じ） */
+  /** Again で、更新後の state が 1 か 3。このセッション内で再出題される（6-3 の再出題条件と同じ） */
   requeue: boolean;
-  /** requeue なら「↻」、それ以外は scheduled_days で「N日後」 */
+  /** requeue なら「↻」、Hard / Good で Learning / Relearning のままなら「今日」、それ以外は scheduled_days で「N日後」 */
   label: string;
 }
 
 export const REQUEUE_LABEL = '↻';
+export const TODAY_LABEL = '今日';
 
-/** 6-3 手順 4 の再出題条件: 更新後の state が Learning か Relearning */
+/** 更新後の state が Learning か Relearning（10 分ステップ待ち。今日の復習に含まれる） */
 export const isShortTermState = (state: CardState): boolean => state === 1 || state === 3;
 
-/** requeue なら「↻」、それ以外は scheduled_days で「N日後」（5-4） */
-export function previewLabel(state: CardState, scheduledDays: number): string {
-  if (isShortTermState(state)) return REQUEUE_LABEL;
+/** 6-3 手順 4 の再出題条件: Again で、更新後の state が Learning か Relearning。Hard / Good / Easy では再出題しない */
+export const requeuesInSession = (grade: Grade, state: CardState): boolean => grade === 1 && isShortTermState(state);
+
+/** 再出題なら「↻」、10 分ステップ待ちなら「今日」、それ以外は scheduled_days で「N日後」（5-4） */
+export function previewLabel(grade: Grade, state: CardState, scheduledDays: number): string {
+  if (requeuesInSession(grade, state)) return REQUEUE_LABEL;
+  if (isShortTermState(state)) return TODAY_LABEL;
   return `${Math.max(1, Math.round(scheduledDays))}日後`;
 }
 
@@ -137,7 +142,7 @@ export function preview(word: Word, now: number): Record<Grade, PreviewItem> {
   for (const g of GRADES) {
     const { card } = record[g as TsGrade];
     const state = card.state as CardState;
-    result[g] = { due: card.due.getTime(), requeue: isShortTermState(state), label: previewLabel(state, card.scheduled_days) };
+    result[g] = { due: card.due.getTime(), requeue: requeuesInSession(g, state), label: previewLabel(g, state, card.scheduled_days) };
   }
   return result;
 }
