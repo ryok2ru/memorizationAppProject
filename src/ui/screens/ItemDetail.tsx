@@ -467,6 +467,7 @@ export function ItemDetail({ kind, id }: { kind: ItemKind; id: string }) {
             <div className="detail-front is-node">{node!.name}</div>
           )}
         </div>
+        {/* 「グラフで見る」は通常だけ。編集中は代わりに各区分の「＋」が出る（7-12） */}
         {mode === 'view' && view.count > 0 && (
           <div className="graph-link">
             <button type="button" className="btn-text" onClick={() => navigate(`/graph/${id}?mode=relation`)} data-testid="open-graph">
