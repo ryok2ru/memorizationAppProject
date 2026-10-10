@@ -18,6 +18,7 @@ import { loadStreak, streakMessage } from '../../app/streak';
 import { loadSettings, requestPersistentStorage } from '../../app/settings';
 import { finishToday, needsRefresh } from '../../app/notify';
 import { updateBadge } from '../../app/badge';
+import { orphanCountIfFoldersDeleted, withOrphanSuffix } from '../../app/relations';
 import { validateFolderName } from '../../domain/validation';
 import { formatShortDateTime } from '../../domain/dates';
 import { FAVORITES, LIMITS, type Folder, type Word } from '../../domain/types';
@@ -75,6 +76,8 @@ export function Home() {
   const [editing, setEditing] = useState<Folder | null>(null);
   const [copying, setCopying] = useState<Folder | null>(null);
   const [deleting, setDeleting] = useState<Folder | null>(null);
+  /** フォルダの削除で関係がなくなるノードの数（確認文に添える。4-12） */
+  const [orphanCount, setOrphanCount] = useState(0);
   const [message, setMessage] = useState<string | null>(null);
   const [info, setInfo] = useState(false);
   const [standalone] = useState(() => isStandalone());
@@ -155,6 +158,16 @@ export function Home() {
   const allFoldersSelected = allSelected(selected, folderIds);
   /** 選んだフォルダの単語数の合計（確認文に出す） */
   const selectedCards = [...selected].reduce((n, id) => n + (data?.stats[id]?.total ?? 0), 0);
+
+  /** 確認文に孤立ノードの件数を添えるため、数えてから確認を出す（7-2、4-12） */
+  const askDelete = async (ids: string[], open: () => void) => {
+    try {
+      setOrphanCount(await orphanCountIfFoldersDeleted(ids));
+      open();
+    } catch (e) {
+      setMessage(errorMessage(e));
+    }
+  };
 
   const onBulkDelete = async () => {
     setConfirmBulk(false);
@@ -498,7 +511,7 @@ export function Home() {
 
       {selecting && (
         <div className="fixed-bottom">
-          <button type="button" className="btn-danger-solid" disabled={selected.size === 0} onClick={() => setConfirmBulk(true)} data-testid="bulk-delete-folders">
+          <button type="button" className="btn-danger-solid" disabled={selected.size === 0} onClick={() => void askDelete([...selected], () => setConfirmBulk(true))} data-testid="bulk-delete-folders">
             {selected.size}件を削除
           </button>
         </div>
@@ -545,7 +558,8 @@ export function Home() {
           setMenuFolder(null);
         }}
         onDelete={() => {
-          setDeleting(menuFolder);
+          const f = menuFolder;
+          if (f) void askDelete([f.id], () => setDeleting(f));
           setMenuFolder(null);
         }}
       />
@@ -555,7 +569,7 @@ export function Home() {
       <ConfirmDialog
         open={deleting != null}
         title="フォルダを削除"
-        message={`「${deleting?.name ?? ''}」と配下のカード、学習履歴をすべて削除します。よろしいですか？`}
+        message={withOrphanSuffix(`「${deleting?.name ?? ''}」と配下のカード、学習履歴をすべて削除します。よろしいですか？`, orphanCount)}
         confirmLabel="削除"
         danger
         onConfirm={onDelete}
@@ -565,7 +579,7 @@ export function Home() {
       <ConfirmDialog
         open={confirmBulk}
         title="フォルダを削除"
-        message={bulkDeleteFoldersMessage(selected.size, selectedCards)}
+        message={withOrphanSuffix(bulkDeleteFoldersMessage(selected.size, selectedCards), orphanCount)}
         confirmLabel="削除"
         danger
         onConfirm={() => void onBulkDelete()}

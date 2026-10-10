@@ -86,3 +86,12 @@ export function parseHHMM(s: string): { h: number; m: number } {
   const mi = Math.min(59, Math.max(0, Number(m[2])));
   return { h, m: mi };
 }
+
+/** カード詳細画面の次の復習（7-12）。「3日後（10/13）」。今日か期限切れなら「今日」、New なら「未学習」 */
+export function detailDueLabel(due: number, state: number, now: number): string {
+  if (state === 0) return '未学習';
+  const d = diffDays(due, now);
+  if (d <= 0) return '今日';
+  const dt = new Date(due);
+  return `${d}日後（${dt.getMonth() + 1}/${dt.getDate()}）`;
+}

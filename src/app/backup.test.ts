@@ -11,7 +11,9 @@ import {
   importBackup,
   parseBackup,
 } from './backup';
-import { clearAll, createFolder, createWord, getWordImage, readSnapshot, saveRating, saveSettings } from '../db/repo';
+import { cardToNode, clearAll, createFolder, createWord, getWordImage, readSnapshot, saveRating, saveSettings } from '../db/repo';
+import { db } from '../db/db';
+import { addRelation } from './relations';
 import { rate } from '../domain/fsrs';
 
 const now = new Date(2026, 8, 18, 9, 5, 0).getTime();
@@ -178,6 +180,75 @@ describe('画像のバックアップ（4-8、10-2）', () => {
     expect(() => parseBackup(fileWith([null]))).toThrow(BackupFormatError);
     expect(() => parseBackup(fileWith([{ wordId: 'w', side: 'back' }]))).toThrow(BackupFormatError);
     expect(() => parseBackup(fileWith([{ wordId: 'w', side: 'back', data: '<not base64>' }]))).toThrow(BackupFormatError);
+  });
+});
+
+describe('関係とノードのバックアップ（10-2）', () => {
+  beforeEach(async () => {
+    await clearAll();
+  });
+
+  const base = {
+    app: 'Memoraq',
+    schemaVersion: 2,
+    exportedAt: now,
+    folders: [{ id: 'f', name: 'A', frontLabel: '表', backLabel: '裏', createdAt: now, sortOrder: 0 }],
+    words: [{ id: 'w', folderId: 'f', englishTerm: 'a', japaneseDefinition: 'あ', memo: '', createdAt: now, updatedAt: now }],
+    reviewLogs: [],
+  };
+  const file = (extra: object) => JSON.stringify({ ...base, ...extra });
+
+  it('関係とノード（ノードに戻したカードの画像を含む）が往復する', async () => {
+    const f = await createFolder('A', now);
+    const a = await createWord({ folderId: f.id, englishTerm: 'a', japaneseDefinition: 'あ', memo: '' }, now);
+    const b = await createWord({ folderId: f.id, englishTerm: 'b', japaneseDefinition: 'い', memo: '' }, now);
+    await addRelation(a.id, 'links', { id: b.id }, { dir: 'out', label: '対義' }, now);
+    await addRelation(a.id, 'parents', { newNodeName: '上' }, undefined, now);
+    await db.images.put({ wordId: b.id, data: new Uint8Array([1, 2]).buffer, type: 'image/jpeg', side: 'back', updatedAt: now });
+    await cardToNode(b.id, now);
+    const before = await readSnapshot();
+    const { text } = await exportBackup(now);
+    await clearAll();
+    await importBackup(parseBackup(text));
+    const after = await readSnapshot();
+    expect(after.edges).toEqual(before.edges);
+    expect(after.nodes).toEqual(before.nodes);
+    expect(after.nodes).toHaveLength(2);
+    expect(await getWordImage(b.id)).toBeDefined();
+  });
+
+  it('edges・nodes の無いファイルは関係なしで読む', () => {
+    const parsed = parseBackup(file({}));
+    expect(parsed.edges).toEqual([]);
+    expect(parsed.nodes).toEqual([]);
+    expect(parsed.schemaVersion).toBe(2);
+  });
+
+  it('端の欠けた関係と、関係のなくなったノードを捨てる。label と directed は既定で補う', () => {
+    const parsed = parseBackup(
+      file({
+        nodes: [
+          { id: 'n1', name: 'keep', createdAt: 1, updatedAt: 1 },
+          { id: 'n2', name: 'lonely', createdAt: 1, updatedAt: 1, saved: null },
+        ],
+        edges: [
+          { id: 'e1', kind: 'link', from: 'w', to: 'n1' },
+          { id: 'e2', kind: 'hierarchy', from: 'n2', to: 'gone', createdAt: 1 },
+        ],
+        images: [{ wordId: 'n2', type: 'image/jpeg', side: 'back', updatedAt: 1, data: 'AQL6' }],
+      }),
+    );
+    expect(parsed.edges).toEqual([{ id: 'e1', kind: 'link', from: 'w', to: 'n1', directed: false, label: '', createdAt: 0 }]);
+    expect(parsed.nodes).toEqual([{ id: 'n1', name: 'keep', createdAt: 1, updatedAt: 1, saved: null }]);
+    // 捨てたノードの画像も捨てる
+    expect(parsed.images).toEqual([]);
+  });
+
+  it('形の不正な edges・nodes を拒否する', () => {
+    expect(() => parseBackup(file({ edges: {} }))).toThrow(BackupFormatError);
+    expect(() => parseBackup(file({ nodes: 'x' }))).toThrow(BackupFormatError);
+    expect(() => parseBackup(file({ edges: [{ id: 'e', from: 'w' }] }))).toThrow(BackupFormatError);
+    expect(() => parseBackup(file({ nodes: [{ id: 'n' }] }))).toThrow(BackupFormatError);
   });
 });
 

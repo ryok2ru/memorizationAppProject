@@ -1775,3 +1775,432 @@ h2.heading {
   gap: 4px;
   margin-top: -8px;
 }
+
+/* ---------- カード詳細画面（7-12） ---------- */
+
+.detail-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.detail-front {
+  font-size: 26px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.detail-back {
+  font-size: 18px;
+  overflow-wrap: anywhere;
+}
+
+.detail-memo h3 {
+  margin: 0 0 4px;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.detail-memo p {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.detail-card .card-image {
+  -webkit-touch-callout: none;
+}
+
+/* 学習の状態の枠（7-12） */
+.detail-state {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  font-size: 15px;
+}
+
+/* ノードの名前は薄い文字（7-12、7-13） */
+.is-node {
+  color: var(--muted);
+}
+
+.graph-link {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: -8px;
+}
+
+/* 関係側の区分と行（7-12、7-14） */
+.relation-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.relation-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+}
+
+.relation-head h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.relation-none {
+  margin: 8px 0 0;
+}
+
+.relation-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.relation-row {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  border-bottom: 1px solid var(--border);
+}
+
+.relation-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 4px;
+  color: inherit;
+  text-align: left;
+  font-size: 16px;
+}
+
+.relation-mark {
+  flex: none;
+  width: 1.2em;
+  color: var(--muted);
+  font-family: ui-monospace, Menlo, monospace;
+}
+
+.relation-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 「ノード」とフォルダ名（小さく添える） */
+.relation-tag {
+  flex: none;
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--muted);
+  margin-left: 6px;
+}
+
+/* 連結のラベルは右端に小さく */
+.relation-label {
+  margin-left: auto;
+  flex: none;
+  max-width: 35%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.relation-remove {
+  flex: none;
+  color: var(--again);
+  font-size: 22px;
+  padding: 0;
+  min-width: 36px;
+}
+
+.relation-pencil {
+  flex: none;
+  color: var(--accent);
+  font-size: 18px;
+  padding: 0;
+}
+
+/* ---------- 関係の追加シート・連結の編集シート（7-12-2、7-12-3） ---------- */
+
+.add-relation-sheet[open] {
+  height: 85dvh;
+}
+
+.sheet .sheet-title-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sheet-back {
+  font-size: 24px;
+  min-height: 32px;
+  padding: 0 8px 0 0;
+}
+
+.add-relation-search {
+  flex: none;
+}
+
+.candidate-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.candidate-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  width: 100%;
+  min-height: 52px;
+  padding: 6px 0;
+  text-align: left;
+  color: inherit;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+}
+
+.candidate-row:disabled {
+  opacity: 0.4;
+}
+
+.candidate-create {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.label-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  font-size: 14px;
+  color: inherit;
+}
+
+/* ---------- カードのポップアップ（7-14） ---------- */
+
+dialog.card-popup {
+  width: min(92vw, 420px);
+  height: 80dvh;
+  padding: 0;
+}
+
+dialog.card-popup[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+.card-popup-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 8px 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.card-popup-head .segmented {
+  flex: 1;
+}
+
+.card-popup-body {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 16px;
+}
+
+.result-word-row.is-tappable {
+  cursor: pointer;
+}
+
+/* ---------- グラフ画面（7-13） ---------- */
+
+.graph-box {
+  width: 100%;
+}
+
+.relation-graph {
+  position: relative;
+  margin: 0 auto;
+}
+
+.relation-graph svg {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
+.graph-line-h {
+  fill: none;
+  stroke: var(--fg);
+  stroke-width: 1.5;
+}
+
+.graph-line-l {
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+}
+
+.graph-arrow {
+  fill: var(--muted);
+}
+
+.graph-item-wrap {
+  position: absolute;
+}
+
+.graph-item {
+  display: block;
+  width: 100%;
+  height: 32px;
+  min-height: 32px;
+  min-width: 0;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.graph-item.is-center {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+.graph-item.is-node {
+  border-style: dashed;
+  color: var(--muted);
+}
+
+.graph-item.is-center.is-node {
+  color: #fff;
+}
+
+.graph-more {
+  color: var(--accent);
+}
+
+.graph-label {
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--muted);
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.graph-plus {
+  position: absolute;
+  min-height: 0;
+  min-width: 0;
+  padding: 0;
+  border: 1px solid var(--accent);
+  border-radius: 50%;
+  color: var(--accent);
+  font-size: 16px;
+  line-height: 1;
+}
+
+/* 階層モード（アウトライン） */
+.outline {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.outline-paths {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.outline-row {
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+}
+
+.outline-tree {
+  flex: none;
+  color: var(--muted);
+  font-family: ui-monospace, Menlo, monospace;
+  white-space: pre;
+}
+
+.outline-toggle {
+  flex: none;
+  min-height: 40px;
+  min-width: 0;
+  padding: 0 6px;
+  color: var(--accent);
+  font-size: 14px;
+}
+
+.outline-name {
+  justify-content: flex-start;
+  min-height: 40px;
+  min-width: 0;
+  padding: 0 4px;
+  color: inherit;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.outline-name.is-center {
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.outline-name.is-node {
+  color: var(--muted);
+}
+
+.outline-more {
+  font-size: 14px;
+}
+
+.outline-name .relation-tag {
+  max-width: none;
+}

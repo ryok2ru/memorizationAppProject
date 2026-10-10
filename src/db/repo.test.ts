@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { db } from './db';
 import {
+  addEdge,
+  listAllWords,
+  listEdges,
+  listNodes,
   clearAll,
   countByState,
   countNewWords,
@@ -467,5 +471,69 @@ describe('images（4-8）', () => {
     expect(await read(w.id)).toBeUndefined();
     await replaceAll(snap);
     expect(await read(w.id)).toEqual({ bytes: [7, 8], side: 'front', type: 'image/jpeg' });
+  });
+});
+
+describe('関係とノード（4-9〜4-12）', () => {
+  const link = (id: string, from: string, to: string) => ({ id, kind: 'link' as const, from, to, directed: false, label: '', createdAt: now });
+
+  async function setup() {
+    const f = await createFolder('A', now);
+    const g = await createFolder('B', now);
+    const a = await createWord({ folderId: f.id, englishTerm: 'a', japaneseDefinition: 'あ', memo: '' }, now);
+    const b = await createWord({ folderId: g.id, englishTerm: 'b', japaneseDefinition: 'い', memo: '' }, now);
+    const node = { id: 'n1', name: 'node', createdAt: now, updatedAt: now, saved: null };
+    await addEdge(link('e1', a.id, b.id));
+    await addEdge(link('e2', node.id, a.id), node);
+    return { f, g, a, b, node };
+  }
+
+  it('カードの削除（1 件・一括）で関係が消え、関係のなくなるノードも消える', async () => {
+    const { a, b } = await setup();
+    await deleteWord(a.id);
+    expect(await listEdges()).toEqual([]);
+    expect(await listNodes()).toEqual([]);
+    await deleteWords([b.id]);
+    expect(await getWord(b.id)).toBeUndefined();
+  });
+
+  it('フォルダの削除と一括削除で配下のカードの関係が消える', async () => {
+    const { f, g, b } = await setup();
+    await deleteFolder(f.id);
+    expect(await listEdges()).toEqual([]);
+    expect(await listNodes()).toEqual([]);
+    expect(await getWord(b.id)).toBeDefined();
+    await deleteFolders([g.id]);
+    expect(await getWord(b.id)).toBeUndefined();
+  });
+
+  it('フォルダの移動・進捗リセット・☆ では関係もノードも変わらない', async () => {
+    const { g, a } = await setup();
+    const before = { edges: await listEdges(), nodes: await listNodes() };
+    await moveWords([a.id], g.id, now);
+    await resetProgress(null, now);
+    await setFavorite(a.id, true, now);
+    expect({ edges: await listEdges(), nodes: await listNodes() }).toEqual(before);
+  });
+
+  it('words を読む処理（今日の復習数、キュー、検索、件数）にノードが出ない', async () => {
+    await setup();
+    expect(await countWords('all')).toBe(2);
+    expect(await countNewWords('all')).toBe(2);
+    expect((await listNewWords('all', now)).map((w) => w.englishTerm).sort()).toEqual(['a', 'b']);
+    expect(await listDueWords('all', addDays(now, 1))).toEqual([]);
+    expect((await listAllWords()).some((w) => w.id === 'n1')).toBe(false);
+    expect((await countByState('all'))[0]).toBe(2);
+  });
+
+  it('スナップショットと置き換えに関係とノードが含まれる', async () => {
+    await setup();
+    const snap = await readSnapshot();
+    expect(snap.edges).toHaveLength(2);
+    expect(snap.nodes).toHaveLength(1);
+    await clearAll();
+    await replaceAll(snap);
+    expect(await listEdges()).toHaveLength(2);
+    expect(await listNodes()).toHaveLength(1);
   });
 });

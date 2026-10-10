@@ -69,6 +69,44 @@ export interface WordImage {
   updatedAt: number;
 }
 
+/** 関係の種類（4-9）。階層（上位→下位）か連結か */
+export type EdgeKind = 'hierarchy' | 'link';
+
+/** 関係（4-9）。端の id は words.id か nodes.id */
+export interface Edge {
+  id: string;
+  kind: EdgeKind;
+  /** 階層：上位。連結：登録時に起点にした項目 */
+  from: string;
+  /** 階層：下位。連結：相手 */
+  to: string;
+  /** 連結の単一方向（from → to）のときだけ true */
+  directed: boolean;
+  /** 連結のラベル。0〜20 文字。階層は常に空文字 */
+  label: string;
+  createdAt: number;
+}
+
+/** カードからノードに戻したときに残す、カードの内容と学習状態（4-10） */
+export interface SavedCard extends FsrsFields {
+  folderId: string;
+  japaneseDefinition: string;
+  memo: string;
+  favorite: boolean;
+  createdAt: number;
+}
+
+/** ノード（4-10）。関係を見るためだけに置く、覚えない項目 */
+export interface NodeItem {
+  id: string;
+  /** 1〜200 文字 */
+  name: string;
+  createdAt: number;
+  updatedAt: number;
+  /** カードから戻したときだけ。ノードとして作ったものは null */
+  saved: SavedCard | null;
+}
+
 export interface ReviewLog {
   id: string;
   wordId: string;
@@ -134,6 +172,18 @@ export const LIMITS = {
   masteredStability: 30,
   /** 画像の縮小後の長辺（px）（4-8） */
   imageMaxSide: 1280,
+  /** ノードの名前（4-10） */
+  nodeName: 200,
+  /** 連結のラベル（4-9） */
+  edgeLabel: 20,
+  /** ラベルの候補の数（4-11） */
+  labelSuggestions: 8,
+  /** グラフの関係モードで各方向に出す数（7-13） */
+  graphSideMax: 3,
+  /** アウトラインの上位への経路の数（7-13） */
+  outlinePathsMax: 10,
+  /** アウトラインの各段に出す数（7-13） */
+  outlineLevelMax: 20,
 } as const;
 
 export const GRADES: readonly Grade[] = [1, 2, 3, 4];

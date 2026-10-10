@@ -21,6 +21,7 @@ import {
   setFavorites,
 } from '../../db/repo';
 import { updateBadge } from '../../app/badge';
+import { orphansIfItemsDeleted, swipeDeletedMessage, withOrphanSuffix } from '../../app/relations';
 import { endOfDay, relativeDueLabel } from '../../domain/dates';
 import { FAVORITES, LIMITS, STATE_ICONS, STATE_NAMES, type CardState, type Folder, type Word } from '../../domain/types';
 import { folderLabels } from '../../domain/labels';
@@ -168,6 +169,10 @@ export function WordList({ favorites = false }: { favorites?: boolean } = {}) {
   const [confirmBulk, setConfirmBulk] = useState(false);
   const [moving, setMoving] = useState(false);
   const [pending, setPending] = useState<Word | null>(null);
+  /** 保留中の削除で関係がなくなるノードの数（トーストの文面。4-12） */
+  const [pendingOrphans, setPendingOrphans] = useState(0);
+  /** 一括削除で関係がなくなるノードの数（確認文。4-12） */
+  const [bulkOrphans, setBulkOrphans] = useState(0);
   const pendingRef = useRef<{ word: Word; timer: ReturnType<typeof setTimeout> } | null>(null);
   const now = Date.now();
 
@@ -251,10 +256,17 @@ export function WordList({ favorites = false }: { favorites?: boolean } = {}) {
   }, [reload]);
 
   const swipeDelete = (word: Word) => {
-    void commitPending(); // 直前の保留分があれば先に確定する
+    const prev = commitPending(); // 直前の保留分があれば先に確定する
     const timer = setTimeout(() => void commitPending(), UNDO_MS);
     pendingRef.current = { word, timer };
     setPending(word);
+    // 関係がなくなるノードがあればトーストに件数を添える（4-12）。直前の保留分を確定してから数える
+    setPendingOrphans(0);
+    void prev
+      .then(() => orphansIfItemsDeleted([word.id]))
+      .then((orphans) => {
+        if (pendingRef.current?.word.id === word.id) setPendingOrphans(orphans.length);
+      });
   };
 
   /**
@@ -318,6 +330,16 @@ export function WordList({ favorites = false }: { favorites?: boolean } = {}) {
       const n = await setFavorites(ids, favoriteOn);
       reload();
       showToast(favoriteMessage(n, favoriteOn));
+    } catch (e) {
+      setMessage(errorMessage(e));
+    }
+  };
+
+  /** 確認文に孤立ノードの件数を添えるため、数えてから確認を出す（4-12） */
+  const askBulkDelete = async () => {
+    try {
+      setBulkOrphans((await orphansIfItemsDeleted([...selected])).length);
+      setConfirmBulk(true);
     } catch (e) {
       setMessage(errorMessage(e));
     }
@@ -493,7 +515,7 @@ export function WordList({ favorites = false }: { favorites?: boolean } = {}) {
       {/* 画面下のトースト。削除の「元に戻す」を優先し、同じ位置に重ねない */}
       {pending ? (
         <div className="toast" role="status" data-testid="undo-toast">
-          <span>削除しました</span>
+          <span>{swipeDeletedMessage(pendingOrphans)}</span>
           <button type="button" onClick={undoDelete}>
             元に戻す
           </button>
@@ -522,7 +544,7 @@ export function WordList({ favorites = false }: { favorites?: boolean } = {}) {
             <button type="button" className="btn-secondary" disabled={selected.size === 0} onClick={() => setMoving(true)} data-testid="bulk-move">
               移動
             </button>
-            <button type="button" className="btn-danger-solid" disabled={selected.size === 0} onClick={() => setConfirmBulk(true)} data-testid="bulk-delete">
+            <button type="button" className="btn-danger-solid" disabled={selected.size === 0} onClick={() => void askBulkDelete()} data-testid="bulk-delete">
               {selected.size}件を削除
             </button>
           </div>
@@ -541,7 +563,7 @@ export function WordList({ favorites = false }: { favorites?: boolean } = {}) {
       <ConfirmDialog
         open={confirmBulk}
         title="カードを削除"
-        message={bulkDeleteMessage(selected.size, selectedFavorites)}
+        message={withOrphanSuffix(bulkDeleteMessage(selected.size, selectedFavorites), bulkOrphans)}
         confirmLabel="削除"
         danger
         onConfirm={() => void bulkDelete()}

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { buildQueueFrom, shuffle } from './queue';
+import { buildQueueFrom, separateSiblings, shuffle } from './queue';
+import { parentsMap } from '../domain/relations';
+import type { Edge } from '../domain/types';
 import type { Word } from '../domain/types';
 import { newCardFields } from '../domain/fsrs';
 
@@ -47,5 +49,45 @@ describe('buildQueueFrom', () => {
     expect(q.ids.slice().sort()).toEqual(many.map((w) => w.id).sort());
     expect(q.ids).not.toEqual(many.map((w) => w.id));
     expect(shuffle([1, 2, 3], () => 0)).toEqual([2, 3, 1]);
+  });
+});
+
+describe('兄弟の並べ替え（6-2 の手順 4）', () => {
+  const h = (from: string, to: string): Edge => ({ id: `${from}-${to}`, kind: 'hierarchy', from, to, directed: false, label: '', createdAt: 0 });
+  // 動物 → 犬・猫・鳥。果物 → りんご・みかん
+  const parents = parentsMap([h('animal', 'dog'), h('animal', 'cat'), h('animal', 'bird'), h('fruit', 'apple'), h('fruit', 'orange')]);
+  const adjacent = (ids: string[]) => ids.slice(1).filter((id, i) => parents.get(id)?.some((p) => parents.get(ids[i])?.includes(p))).length;
+
+  it('New のみで兄弟が隣り合わない', () => {
+    const news = ['dog', 'cat', 'bird', 'apple', 'orange', 'x'].map((id) => mk(id, 0));
+    const q = buildQueueFrom([], news, 30, false, Math.random, parents);
+    expect(q.kind).toBe('new');
+    expect(adjacent(q.ids)).toBe(0);
+    expect(q.ids.slice().sort()).toEqual(news.map((w) => w.id).sort());
+  });
+
+  it('離せないときもカードを落とさず、隣り合わせは残りが兄弟だけになった所だけ', () => {
+    const ids = separateSiblings(['dog', 'cat', 'bird', 'x'], parents);
+    expect(ids).toEqual(['dog', 'x', 'cat', 'bird']);
+    expect(adjacent(ids)).toBe(1);
+  });
+
+  it('シャッフル OFF で兄弟がいなければ順序は変わらない', () => {
+    const news = ['a', 'dog', 'b', 'apple', 'c'].map((id) => mk(id, 0));
+    expect(buildQueueFrom([], news, 30, false, Math.random, parents).ids).toEqual(['a', 'dog', 'b', 'apple', 'c']);
+  });
+
+  it('シャッフル OFF では登録順を保ったまま必要な所だけを動かす', () => {
+    expect(separateSiblings(['dog', 'cat', 'x', 'bird', 'y'], parents)).toEqual(['dog', 'x', 'cat', 'y', 'bird']);
+  });
+
+  it('上位がノードでも兄弟として扱う（parents の上位はカードかノードかを問わない）', () => {
+    const p = parentsMap([h('node-id', 'a'), h('node-id', 'b')]);
+    expect(separateSiblings(['a', 'b', 'c'], p)).toEqual(['a', 'c', 'b']);
+  });
+
+  it('復習のセッションでは並べ替えない', () => {
+    const due = ['dog', 'cat', 'x'].map((id) => mk(id));
+    expect(buildQueueFrom(due, [], 30, false, Math.random, parents).ids).toEqual(['dog', 'cat', 'x']);
   });
 });
