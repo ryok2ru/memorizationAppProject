@@ -57,3 +57,11 @@ export function validateFolderLabel(label: string, name: string): string | null 
   if (n.length > LIMITS.folderLabel) return `${name}は${LIMITS.folderLabel}文字以内にしてください`;
   return null;
 }
+
+/** ノードの名前の検証（4-10）。1〜200 文字、trim 後に非空。重複してよい */
+export function validateNodeName(name: string): string | null {
+  const n = name.trim();
+  if (n.length === 0) return '名前を入力してください';
+  if (n.length > LIMITS.nodeName) return `名前は${LIMITS.nodeName}文字以内にしてください`;
+  return null;
+}

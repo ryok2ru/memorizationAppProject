@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { imageChanged } from './WordForm';
+import { imageChanged } from './CardFields';
 
 describe('imageChanged（7-4 の画像の変更判定）', () => {
   const data = new ArrayBuffer(4);

@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Header } from '../components/Header';
+import { CardPopup } from '../components/CardPopup';
 import { useAsync, errorMessage } from '../hooks';
 import { getSession, ratedEntries, setSession, summarize } from '../../app/session';
 import { hadStudiedTodayBefore, loadStreak } from '../../app/streak';
@@ -17,6 +18,9 @@ export function Result() {
   const [message, setMessage] = useState<string | null>(null);
   /** 一覧の ☆ を押した分の上書き。押した時点で保存するので、読み直さずにこの画面だけで表示を切り替える */
   const [favorites, setFavorites] = useState<Record<string, boolean>>({});
+  /** 行のタップで開くカードのポップアップ（7-14） */
+  const [popup, setPopup] = useState<string | null>(null);
+  const closePopup = useCallback(() => setPopup(null), []);
   const { data } = useAsync(async () => {
     if (!session) return null;
     // 評価した単語を出題順に（7-7）。単語の本文は id から読み直す
@@ -129,13 +133,17 @@ export function Result() {
             {data.rows.map(({ word, grade, due }) => {
               const on = favorites[word.id] ?? word.favorite;
               return (
-                <li key={word.id} className="result-word-row">
+                // 行のタップ（☆ を除く）でカードのポップアップを出す（7-7、7-14）
+                <li key={word.id} className="result-word-row is-tappable" onClick={() => setPopup(word.id)} data-testid={`result-row-${word.id}`}>
                   <button
                     type="button"
                     className={`result-star${on ? ' on' : ''}`}
                     aria-pressed={on}
                     aria-label={`${word.englishTerm} を${on ? 'お気に入りから外す' : 'お気に入りに追加'}`}
-                    onClick={() => void toggleFavorite(word)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void toggleFavorite(word);
+                    }}
                     data-testid={`result-star-${word.id}`}
                   >
                     {on ? '★' : '☆'}
@@ -163,6 +171,8 @@ export function Result() {
           今日の学習を終える
         </button>
       )}
+
+      <CardPopup wordId={popup} onClose={closePopup} />
 
       {/* 画面下部に固定（7-7）。上から「もう一度」（枠線のみ）、「ホームへ」（強調色）。内容はこの上でスクロールする */}
       <div className="fixed-bottom result-actions">

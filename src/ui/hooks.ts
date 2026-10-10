@@ -48,7 +48,7 @@ export function errorMessage(e: unknown): string {
  * カードの画像（4-8）を表示用の object URL で返す。画像が無い、または読み込み中なら null。
  * 前のカードの画像が一瞬でも残らないよう、読み込んだ wordId が今の wordId と一致するときだけ返す
  */
-export function useWordImage(wordId: string | undefined): { url: string; side: ImageSide } | null {
+export function useWordImage(wordId: string | undefined, version = 0): { url: string; side: ImageSide } | null {
   const [loaded, setLoaded] = useState<{ wordId: string; url: string; side: ImageSide } | null>(null);
   useEffect(() => {
     if (!wordId) return undefined;
@@ -56,7 +56,11 @@ export function useWordImage(wordId: string | undefined): { url: string; side: I
     let url: string | null = null;
     getWordImage(wordId).then(
       (img) => {
-        if (!alive || !img) return;
+        if (!alive) return;
+        if (!img) {
+          setLoaded(null);
+          return;
+        }
         url = URL.createObjectURL(new Blob([img.data], { type: img.type }));
         setLoaded({ wordId, url, side: img.side });
       },
@@ -66,6 +70,6 @@ export function useWordImage(wordId: string | undefined): { url: string; side: I
       alive = false;
       if (url) URL.revokeObjectURL(url);
     };
-  }, [wordId]);
+  }, [wordId, version]);
   return loaded && loaded.wordId === wordId ? { url: loaded.url, side: loaded.side } : null;
 }

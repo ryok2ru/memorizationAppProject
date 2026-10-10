@@ -5,6 +5,8 @@ import { UpdateBanner } from './ui/components/UpdateBanner';
 import { Home } from './ui/screens/Home';
 import { WordList } from './ui/screens/WordList';
 import { WordForm } from './ui/screens/WordForm';
+import { ItemDetailRoute } from './ui/screens/ItemDetail';
+import { Graph } from './ui/screens/Graph';
 import { ModeSelect } from './ui/screens/ModeSelect';
 import { Flashcard } from './ui/screens/Flashcard';
 import { Typing } from './ui/screens/Typing';
@@ -34,7 +36,10 @@ export default function App() {
             {/* 全フォルダの ★ 付き単語（7-2、7-3） */}
             <Route path="/favorites" element={<WordList favorites />} />
             <Route path="/folders/:folderId/words/new" element={<WordForm />} />
-            <Route path="/words/:wordId" element={<WordForm />} />
+            {/* カード詳細画面（7-12）。カードとノード */}
+            <Route path="/words/:wordId" element={<ItemDetailRoute kind="card" />} />
+            <Route path="/nodes/:nodeId" element={<ItemDetailRoute kind="node" />} />
+            <Route path="/graph/:itemId" element={<Graph />} />
             <Route path="/study/select" element={<ModeSelect />} />
             <Route path="/study/flashcard" element={<Flashcard />} />
             <Route path="/study/typing" element={<Typing />} />

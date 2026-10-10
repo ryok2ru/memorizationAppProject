@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   addDays,
   dateKey,
+  detailDueLabel,
   diffDays,
   endOfDay,
   formatDuration,
@@ -53,6 +54,12 @@ describe('dates', () => {
   it('nextReviewLabel', () => {
     expect(nextReviewLabel(now + 600000, now)).toBe('今日');
     expect(nextReviewLabel(addDays(now, 3), now)).toBe('9月21日（3日後）');
+  });
+  it('detailDueLabel（7-12）', () => {
+    expect(detailDueLabel(now, 0, now)).toBe('未学習');
+    expect(detailDueLabel(addDays(now, -2), 2, now)).toBe('今日');
+    expect(detailDueLabel(now + 600000, 1, now)).toBe('今日');
+    expect(detailDueLabel(addDays(now, 3), 2, now)).toBe('3日後（9/21）');
   });
   it('formatDuration', () => {
     expect(formatDuration(202000)).toBe('3分22秒');

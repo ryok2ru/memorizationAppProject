@@ -1,4 +1,4 @@
-import type { Folder, Word, ReviewLog, Settings, WordImage, ImageSide } from '../domain/types';
+import type { Folder, Word, ReviewLog, Settings, WordImage, ImageSide, Edge, NodeItem } from '../domain/types';
 import { DEFAULT_SETTINGS } from '../domain/types';
 import { LEGACY_LABELS } from '../domain/labels';
 import { readSnapshot, replaceAll, type Snapshot } from '../db/repo';
@@ -14,6 +14,10 @@ export interface Backup {
   settings: Settings;
   /** カードの画像（4-8）。無いファイル（画像を持つ前に書き出したもの）は空として読む */
   images?: BackupImage[];
+  /** 関係（4-9）。無いファイル（関係を持つ前に書き出したもの）は関係なしとして読む */
+  edges?: Edge[];
+  /** ノード（4-10）。無いファイルはノードなしとして読む */
+  nodes?: NodeItem[];
 }
 
 /** バックアップ JSON の中の画像。バイト列は base64 の文字列にする（10-2） */
@@ -62,16 +66,17 @@ const BASE64_RE = /^[A-Za-z0-9+/]*={0,2}$/;
 
 /**
  * 読み込んだ画像を検証する（10-2）。形が不正なら BackupFormatError。
- * 表示する面が無い・不正なら裏（既定）として読み、存在しない単語の画像は捨てる
+ * 表示する面が無い・不正なら裏（既定）として読み、words にも nodes にも無い id の画像は捨てる
+ * （ノードに戻したカードの画像はノードの id で残っている。4-8、4-12）
  */
-function parseImages(raw: unknown, wordIds: Set<string>): BackupImage[] {
+function parseImages(raw: unknown, itemIds: Set<string>): BackupImage[] {
   if (raw === undefined) return [];
   if (!Array.isArray(raw)) throw new BackupFormatError();
   const result: BackupImage[] = [];
   for (const item of raw as Partial<BackupImage>[]) {
     if (typeof item !== 'object' || item === null) throw new BackupFormatError();
     if (typeof item.wordId !== 'string' || typeof item.data !== 'string' || !BASE64_RE.test(item.data)) throw new BackupFormatError();
-    if (!wordIds.has(item.wordId)) continue;
+    if (!itemIds.has(item.wordId)) continue;
     result.push({
       wordId: item.wordId,
       type: typeof item.type === 'string' && item.type.startsWith('image/') ? item.type : 'image/jpeg',
@@ -81,6 +86,55 @@ function parseImages(raw: unknown, wordIds: Set<string>): BackupImage[] {
     });
   }
   return result;
+}
+
+const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null;
+
+/** 読み込んだノードを検証する（10-2）。形が不正なら BackupFormatError。saved が無ければ null */
+function parseNodes(raw: unknown): NodeItem[] {
+  if (raw === undefined) return [];
+  if (!Array.isArray(raw)) throw new BackupFormatError();
+  return raw.map((n: unknown) => {
+    if (!isObject(n) || typeof n.id !== 'string' || typeof n.name !== 'string') throw new BackupFormatError();
+    return {
+      id: n.id,
+      name: n.name,
+      createdAt: typeof n.createdAt === 'number' ? n.createdAt : 0,
+      updatedAt: typeof n.updatedAt === 'number' ? n.updatedAt : 0,
+      saved: isObject(n.saved) ? (n.saved as unknown as NodeItem['saved']) : null,
+    };
+  });
+}
+
+/** 読み込んだ関係を検証する（10-2）。形が不正なら BackupFormatError。label が無ければ空文字、directed が無ければ false */
+function parseEdges(raw: unknown): Edge[] {
+  if (raw === undefined) return [];
+  if (!Array.isArray(raw)) throw new BackupFormatError();
+  return raw.map((e: unknown) => {
+    if (!isObject(e) || typeof e.id !== 'string' || typeof e.from !== 'string' || typeof e.to !== 'string') throw new BackupFormatError();
+    const kind = e.kind === 'link' ? 'link' : 'hierarchy';
+    return {
+      id: e.id,
+      kind,
+      from: e.from,
+      to: e.to,
+      directed: kind === 'link' && e.directed === true,
+      label: kind === 'link' && typeof e.label === 'string' ? e.label : '',
+      createdAt: typeof e.createdAt === 'number' ? e.createdAt : 0,
+    };
+  });
+}
+
+/**
+ * 関係とノードの整合を取る（10-2、4-11）。端の項目が words にも nodes にも無い関係を捨て、
+ * その後で関係が 1 つも無いノードを捨てる（孤立ノードを残さない）
+ */
+export function pruneRelations(wordIds: Set<string>, nodes: NodeItem[], edges: Edge[]): { nodes: NodeItem[]; edges: Edge[] } {
+  const nodeIds = new Set(nodes.map((n) => n.id));
+  const exists = (id: string) => wordIds.has(id) || nodeIds.has(id);
+  const kept = edges.filter((e) => exists(e.from) && exists(e.to));
+  const linked = new Set(kept.flatMap((e) => [e.from, e.to]));
+  return { edges: kept, nodes: nodes.filter((n) => linked.has(n.id)) };
 }
 
 /** 書き出す schemaVersion。Dexie のバージョンと同じ番号（4-7） */
@@ -99,6 +153,8 @@ export function buildBackup(snapshot: Snapshot, now = Date.now()): Backup {
     reviewLogs: snapshot.reviewLogs,
     settings: snapshot.settings,
     images: snapshot.images.map(toBackupImage),
+    edges: snapshot.edges,
+    nodes: snapshot.nodes,
   };
 }
 
@@ -133,6 +189,10 @@ export function parseBackup(text: string): Backup {
   const merged: Settings = { ...DEFAULT_SETTINGS, ...(b.settings ?? {}), id: 'app', schemaVersion: BACKUP_SCHEMA_VERSION };
   // calendarStartDate が無い（または数値でない）ファイルは null（全期間）として読む（4-5、10-2）
   const settings: Settings = { ...merged, calendarStartDate: typeof merged.calendarStartDate === 'number' ? merged.calendarStartDate : null };
+  // 関係とノードが無いファイルは関係なしとして読む。端の欠けた関係と、関係のなくなったノードは捨てる（4-11、10-2）
+  const wordIds = new Set(b.words.map((w) => w?.id));
+  const relations = pruneRelations(wordIds, parseNodes(b.nodes), parseEdges(b.edges));
+  const itemIds = new Set([...wordIds, ...relations.nodes.map((n) => n.id)]);
   return {
     app: 'Memoraq',
     schemaVersion: BACKUP_SCHEMA_VERSION,
@@ -148,7 +208,9 @@ export function parseBackup(text: string): Backup {
     reviewLogs: b.reviewLogs,
     settings,
     // 画像が無いファイルは画像なしとして読む。schemaVersion は上げない（4-7、10-2）
-    images: parseImages(b.images, new Set(b.words.map((w) => w?.id))),
+    images: parseImages(b.images, itemIds),
+    edges: relations.edges,
+    nodes: relations.nodes,
   };
 }
 
@@ -164,6 +226,8 @@ export async function importBackup(backup: Backup): Promise<void> {
     reviewLogs: backup.reviewLogs,
     settings: backup.settings,
     images: (backup.images ?? []).map(fromBackupImage),
+    edges: backup.edges ?? [],
+    nodes: backup.nodes ?? [],
   });
 }
 

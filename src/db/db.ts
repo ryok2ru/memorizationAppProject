@@ -1,5 +1,5 @@
 import Dexie, { type EntityTable } from 'dexie';
-import type { Folder, Word, ReviewLog, Settings, WordImage } from '../domain/types';
+import type { Folder, Word, ReviewLog, Settings, WordImage, Edge, NodeItem } from '../domain/types';
 import { LEGACY_LABELS } from '../domain/labels';
 
 /** 旧名 'vocavault' の DB からは引き継がない（4-7） */
@@ -11,6 +11,8 @@ export const db = new Dexie(DB_NAME) as Dexie & {
   reviewLogs: EntityTable<ReviewLog, 'id'>;
   settings: EntityTable<Settings, 'id'>;
   images: EntityTable<WordImage, 'wordId'>;
+  edges: EntityTable<Edge, 'id'>;
+  nodes: EntityTable<NodeItem, 'id'>;
 };
 
 db.version(1).stores({
@@ -100,4 +102,18 @@ db.version(6).stores({
   reviewLogs: 'id, wordId, review',
   settings: 'id',
   images: 'wordId',
+});
+
+/**
+ * v7: 関係のテーブル edges とノードのテーブル nodes を足す（4-9、4-10、4-7）。
+ * edges は from と to で引く。nodes は主キーだけで引く。既存のテーブルとレコードは変えないので upgrade は要らない。
+ */
+db.version(7).stores({
+  folders: 'id, sortOrder',
+  words: 'id, folderId, due, state, [folderId+due], [folderId+state]',
+  reviewLogs: 'id, wordId, review',
+  settings: 'id',
+  images: 'wordId',
+  edges: 'id, from, to',
+  nodes: 'id',
 });
