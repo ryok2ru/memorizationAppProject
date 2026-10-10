@@ -1,6 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
-import { useCloseOnOutside } from './modal';
-import { useSheetDrag } from './sheetDrag';
+import { syncModal, useCloseOnOutside } from './modal';
 import { LinkFields } from './EditLinkSheet';
 import { ADD_TITLES } from './RelationList';
 import { errorMessage } from '../hooks';
@@ -11,14 +10,14 @@ import {
   labelSuggestions,
   loadSearchData,
   searchCandidates,
-  type Candidate,
+  type SearchResult,
   type RelationTarget,
   type SearchData,
 } from '../../app/relations';
 import { RelationError } from '../../db/repo';
 
-export interface AddRelationSheetHandle {
-  /** 押した処理の中で同期的に呼ぶ。シートを開き、検索欄にフォーカスしてキーボードを出す（7-12-2） */
+export interface AddRelationDialogHandle {
+  /** ダイアログを開く。検索欄にはフォーカスせず、まず候補の一覧を見せる（7-12-2） */
   open: (section: Section) => void;
 }
 
@@ -37,11 +36,12 @@ interface LinkTarget {
   name: string;
 }
 
-/** 関係の追加シート（7-12-2）。全フォルダのカードとノードから相手を探す。名前だけでノードを作れる */
-export const AddRelationSheet = forwardRef<AddRelationSheetHandle, Props>(function AddRelationSheet({ selfId, onAdded }, handle) {
+/**
+ * 関係の追加ダイアログ（7-12-2）。全フォルダのカードとノードから相手を探す。名前だけでノードを作れる。
+ * 中央に出し、開いたときは検索欄にフォーカスしない（キーボードは検索欄を押したときに出る）
+ */
+export const AddRelationDialog = forwardRef<AddRelationDialogHandle, Props>(function AddRelationDialog({ selfId, onAdded }, handle) {
   const ref = useRef<HTMLDialogElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [isOpen, setIsOpen] = useState(false);
   const [section, setSection] = useState<Section>('parents');
   const [data, setData] = useState<SearchData | null>(null);
   const [query, setQuery] = useState('');
@@ -52,12 +52,8 @@ export const AddRelationSheet = forwardRef<AddRelationSheetHandle, Props>(functi
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const close = () => {
-    setIsOpen(false);
-    ref.current?.close();
-  };
+  const close = () => syncModal(ref.current, false);
   const outside = useCloseOnOutside(close);
-  const drag = useSheetDrag(ref, isOpen, close);
 
   useImperativeHandle(handle, () => ({
     open(next: Section) {
@@ -69,11 +65,9 @@ export const AddRelationSheet = forwardRef<AddRelationSheetHandle, Props>(functi
       setLabel('');
       setMessage(null);
       setData(null);
-      setIsOpen(true);
-      const el = ref.current;
-      if (el && !el.open) el.showModal();
-      // iOS でキーボードを出すため、押した処理の中で同期的にフォーカスする（7-2 と同じ）
-      inputRef.current?.focus();
+      // 検索欄にはフォーカスしない（開いた瞬間に欄へフォーカスすると、iOS が欄を見せようとして表示位置をずらすため）。
+      // syncModal はフォーカスをダイアログ自身に置くので、フォーカス枠も出ない
+      syncModal(ref.current, true);
       void loadSearchData().then(setData);
     },
   }));
@@ -83,10 +77,11 @@ export const AddRelationSheet = forwardRef<AddRelationSheetHandle, Props>(functi
     return () => clearTimeout(t);
   }, [query]);
 
-  const candidates: Candidate[] = useMemo(
-    () => (data ? searchCandidates(data, debounced, selfId, section) : []),
+  const result: SearchResult = useMemo(
+    () => (data ? searchCandidates(data, debounced, selfId, section) : { items: [], rest: 0 }),
     [data, debounced, selfId, section],
   );
+  const browsing = debounced.trim() === '';
   const showCreate = data != null && canCreateNode(data, debounced);
   const suggestions = useMemo(() => (data ? labelSuggestions(data.edges) : []), [data]);
 
@@ -113,9 +108,8 @@ export const AddRelationSheet = forwardRef<AddRelationSheetHandle, Props>(functi
 
   return (
     <dialog
-      className={`sheet add-relation-sheet${drag.sliding ? ' sheet-slide' : ''}`}
+      className="add-relation-dialog"
       ref={ref}
-      style={drag.style}
       tabIndex={-1}
       onCancel={(e) => {
         e.preventDefault();
@@ -123,25 +117,27 @@ export const AddRelationSheet = forwardRef<AddRelationSheetHandle, Props>(functi
       }}
       {...outside}
       aria-labelledby="add-relation-title"
-      data-testid="add-relation-sheet"
+      data-testid="add-relation-dialog"
     >
-      <div className="sheet-handle sheet-title-row" {...drag.handleProps}>
+      <div className="card-popup-head">
         {link && (
           <button type="button" className="btn-text sheet-back" aria-label="検索に戻る" onClick={() => setLink(null)}>
             ‹
           </button>
         )}
         <h2 id="add-relation-title">{link ? `「${link.name}」との連結` : ADD_TITLES[section]}</h2>
+        <button type="button" className="btn-icon" aria-label="閉じる" onClick={close}>
+          ✕
+        </button>
       </div>
-      {/* 検索欄は常に置いておき、開いた処理の中でフォーカスできるようにする。連結の次の段では隠す */}
+      {/* 検索欄は一覧と一緒にスクロールさせず、見出しの下に置いたままにする。連結の次の段では隠す */}
       <input
-        ref={inputRef}
         type="search"
         enterKeyHint="search"
         className="add-relation-search"
         placeholder="名前で検索"
+      hidden={link != null}
         value={query}
-        hidden={link != null}
         onChange={(e) => setQuery(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
@@ -149,48 +145,54 @@ export const AddRelationSheet = forwardRef<AddRelationSheetHandle, Props>(functi
         aria-label="名前で検索"
         data-testid="add-relation-search"
       />
-      <div className="sheet-body">
+      <div className="card-popup-body">
         {link ? (
-          <>
-            <LinkFields dir={dir} label={label} suggestions={suggestions} onDir={setDir} onLabel={setLabel} />
-          </>
+          <LinkFields dir={dir} label={label} suggestions={suggestions} onDir={setDir} onLabel={setLabel} />
         ) : (
-          <ul className="candidate-list" aria-label="検索結果">
-            {candidates.map((c) => (
-              <li key={c.item.id}>
-                <button
-                  type="button"
-                  className="candidate-row"
-                  disabled={c.block != null || busy}
-                  onClick={() => choose({ id: c.item.id }, c.item.name)}
-                >
-                  <span className="row-text">
-                    <span className={`row-title${c.item.kind === 'node' ? ' is-node' : ''}`}>{c.item.name}</span>
-                    <span className="row-sub">{c.item.kind === 'node' ? 'ノード' : `${c.item.back}・${c.item.folderName}`}</span>
-                  </span>
-                  {c.block && <span className="row-side">{BLOCK_TEXT[c.block]}</span>}
-                </button>
-              </li>
-            ))}
-            {showCreate && (
-              <li>
-                <button
-                  type="button"
-                  className="candidate-row candidate-create"
-                  disabled={busy}
-                  onClick={() => choose({ newNodeName: debounced.trim() }, debounced.trim())}
-                  data-testid="create-node"
-                >
-                  ＋「{debounced.trim()}」をノードとして作成
-                </button>
-              </li>
+          <>
+            <ul className="candidate-list" aria-label="候補">
+              {result.items.map((c) => (
+                <li key={c.item.id}>
+                  <button
+                    type="button"
+                    className="candidate-row"
+                    disabled={c.block != null || busy}
+                    onClick={() => choose({ id: c.item.id }, c.item.name)}
+                  >
+                    <span className="row-text">
+                      <span className={`row-title${c.item.kind === 'node' ? ' is-node' : ''}`}>{c.item.name}</span>
+                      <span className="row-sub">{c.item.kind === 'node' ? 'ノード' : `${c.item.back}・${c.item.folderName}`}</span>
+                    </span>
+                    {c.block && <span className="row-side">{BLOCK_TEXT[c.block]}</span>}
+                  </button>
+                </li>
+              ))}
+              {showCreate && (
+                <li>
+                  <button
+                    type="button"
+                    className="candidate-row candidate-create"
+                    disabled={busy}
+                    onClick={() => choose({ newNodeName: debounced.trim() }, debounced.trim())}
+                    data-testid="create-node"
+                  >
+                    ＋「{debounced.trim()}」をノードとして作成
+                  </button>
+                </li>
+              )}
+            </ul>
+            {/* 空欄のときは先頭 100 件だけを出し、残りは検索で絞り込んでもらう（7-12-2） */}
+            {browsing && result.rest > 0 && (
+              <p className="small muted candidate-rest" data-testid="candidate-rest">
+                ほか {result.rest}件。検索で絞り込めます
+              </p>
             )}
-          </ul>
+          </>
         )}
         {message && <p className="error">{message}</p>}
       </div>
       {link && (
-        <div className="btn-row">
+        <div className="add-relation-foot">
           <button type="button" className="btn-primary" disabled={busy} onClick={() => void save(link.target, { dir, label })} data-testid="add-link">
             追加
           </button>

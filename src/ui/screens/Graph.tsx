@@ -3,7 +3,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Header } from '../components/Header';
 import { RelationGraph } from '../components/RelationGraph';
 import { Outline } from '../components/Outline';
-import { AddRelationSheet, type AddRelationSheetHandle } from '../components/AddRelationSheet';
+import { AddRelationDialog, type AddRelationDialogHandle } from '../components/AddRelationDialog';
 import { syncModal, useCloseOnOutside } from '../components/modal';
 import { useSheetDrag } from '../components/sheetDrag';
 import { itemPath } from './ItemDetail';
@@ -45,7 +45,7 @@ export function Graph() {
   const [width, setWidth] = useState(358);
   const [moreSide, setMoreSide] = useState<GraphSide | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
-  const sheetRef = useRef<AddRelationSheetHandle>(null);
+  const sheetRef = useRef<AddRelationDialogHandle>(null);
 
   const load = useCallback(async () => {
     const [edges, words, nodes, folders] = await Promise.all([listEdges(), listAllWords(), listNodes(), listFolders()]);
@@ -109,7 +109,7 @@ export function Graph() {
             <Outline centerId={itemId} edges={data.edges} refs={data.refs} onTap={tap} />
           ) : null)}
       </div>
-      <AddRelationSheet ref={sheetRef} selfId={itemId} onAdded={() => void load()} />
+      <AddRelationDialog ref={sheetRef} selfId={itemId} onAdded={() => void load()} />
       <MoreSheet items={moreSide && input ? input[moreSide] : null} side={moreSide} onTap={tap} onClose={() => setMoreSide(null)} />
     </div>
   );

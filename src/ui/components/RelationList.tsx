@@ -4,7 +4,7 @@ import { showFolderName, type ItemRef, type RelationRow, type RelationView } fro
 /** 区分の見出し（7-12） */
 export const SECTION_TITLES: Record<Section, string> = { parents: '↑ 上位', children: '↓ 下位', links: '↔ 連結' };
 
-/** 「＋」で開く追加シートの見出し（7-12-2） */
+/** 「＋」で開く追加ダイアログの見出し（7-12-2） */
 export const ADD_TITLES: Record<Section, string> = { parents: '上位を追加', children: '下位を追加', links: '連結を追加' };
 
 interface Props {
