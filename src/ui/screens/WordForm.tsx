@@ -6,13 +6,36 @@ import { FavoriteButton } from '../components/FavoriteButton';
 import { ImportScreen } from './Import';
 import { movedMessage } from './WordList';
 import { errorMessage } from '../hooks';
-import { createWord, deleteWord, getWord, listFolders, setFavorite, updateWordText } from '../../db/repo';
+import { createWord, deleteWord, getWord, getWordImage, listFolders, setFavorite, updateWordText, type WordImageInput } from '../../db/repo';
+import { ImageLoadError, resizeImage } from '../../app/image';
 import { updateBadge } from '../../app/badge';
 import { importResultMessage, importText, type ImportOptions, type ImportSettings } from '../../app/csv';
 import { loadSettings, requestPersistentStorage, updateSettings } from '../../app/settings';
 import { isWordValid, trimWord, validateWord } from '../../domain/validation';
-import { LIMITS, type Folder } from '../../domain/types';
+import { LIMITS, type Folder, type ImageSide } from '../../domain/types';
 import { folderLabels } from '../../domain/labels';
+
+/** バイト列を表示用の object URL にする。data が変わるか画面を離れたら解放する */
+function useObjectUrl(image: WordImageInput | null): string | null {
+  const data = image?.data;
+  const type = image?.type;
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!data) {
+      setUrl(null);
+      return undefined;
+    }
+    const u = URL.createObjectURL(new Blob([data], { type }));
+    setUrl(u);
+    return () => URL.revokeObjectURL(u);
+  }, [data, type]);
+  return url;
+}
+
+/** 画像が変わったか（7-4）。差し替え・削除・表示する面の変更 */
+export function imageChanged(before: WordImageInput | null, after: WordImageInput | null): boolean {
+  return before?.data !== after?.data || before?.side !== after?.side;
+}
 
 export function WordForm() {
   const { folderId, wordId } = useParams();
@@ -31,10 +54,20 @@ export function WordForm() {
   const [importFile, setImportFile] = useState<{ name: string; text: string; saved: ImportSettings } | null>(null);
   const [importing, setImporting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  // 画像（4-8）。保存ボタンで本文と一緒に保存し、変更はキャンセル時の破棄確認の対象にする
+  const [initialImage, setInitialImage] = useState<WordImageInput | null>(null);
+  const [image, setImage] = useState<WordImageInput | null>(null);
+  const [imageBusy, setImageBusy] = useState(false);
+  const imageRef = useRef<HTMLInputElement>(null);
+  const imageUrl = useObjectUrl(image);
 
   useEffect(() => {
     let alive = true;
-    void Promise.all([listFolders(), isEdit ? getWord(wordId) : Promise.resolve(undefined)]).then(([list, w]) => {
+    void Promise.all([
+      listFolders(),
+      isEdit ? getWord(wordId) : Promise.resolve(undefined),
+      isEdit ? getWordImage(wordId) : Promise.resolve(undefined),
+    ]).then(([list, w, img]) => {
       if (!alive) return;
       if (isEdit && !w) {
         navigate('/', { replace: true });
@@ -47,6 +80,11 @@ export function WordForm() {
         setForm(v);
         setFavoriteState(w.favorite);
       }
+      if (img) {
+        const v: WordImageInput = { data: img.data, type: img.type, side: img.side };
+        setInitialImage(v);
+        setImage(v);
+      }
       setLoaded(true);
     });
     return () => {
@@ -57,12 +95,13 @@ export function WordForm() {
   // 入力欄の見出しは選んでいるフォルダの項目名。フォルダを変えるとその場で切り替わる（7-4）
   const labels = folderLabels(folders.find((f) => f.id === form.folderId));
   const errors = validateWord(form, labels);
-  const canSave = isWordValid(form);
+  const canSave = isWordValid(form) && !imageBusy;
   const dirty =
     form.folderId !== initial.folderId ||
     form.englishTerm !== initial.englishTerm ||
     form.japaneseDefinition !== initial.japaneseDefinition ||
-    form.memo !== initial.memo;
+    form.memo !== initial.memo ||
+    imageChanged(initialImage, image);
   /** キャンセル・削除の戻り先: 元のフォルダ */
   const backTo = `/folders/${initial.folderId}`;
   /** 保存・取込の後の戻り先: 選んだフォルダ（移動した場合は移動先） */
@@ -71,13 +110,15 @@ export function WordForm() {
   const onSave = async () => {
     if (!canSave) return;
     const value = trimWord(form);
+    // 画像は変えたときだけ書く（null = 削除）。変えていなければ undefined で触れない
+    const imageArg = imageChanged(initialImage, image) ? image : undefined;
     try {
       if (isEdit) {
         // folderId も一緒に更新する。FSRS の状態と ReviewLog は変えない
-        await updateWordText(wordId, { ...value, folderId: form.folderId });
+        await updateWordText(wordId, { ...value, folderId: form.folderId }, Date.now(), imageArg);
       } else {
         requestPersistentStorage();
-        await createWord({ folderId: form.folderId, ...value });
+        await createWord({ folderId: form.folderId, ...value }, Date.now(), imageArg);
         await updateBadge();
       }
       // 編集でフォルダを変えたときは、移動先の一覧で「1件を「フォルダ名」に移動しました」を出す（7-4）
@@ -117,6 +158,28 @@ export function WordForm() {
   const onCancel = () => {
     if (dirty) setConfirmDiscard(true);
     else navigate(backTo);
+  };
+
+  // ---------- 画像（4-8）。選んだら長辺 1280px の JPEG に縮小して持つ ----------
+
+  const onPickImage = async (file: File | undefined) => {
+    if (imageRef.current) imageRef.current.value = '';
+    if (!file) return;
+    setImageBusy(true);
+    try {
+      const { data, type } = await resizeImage(file);
+      setImage({ data, type, side: image?.side ?? 'back' });
+      setMessage(null);
+    } catch (e) {
+      console.error(e);
+      setMessage(e instanceof ImageLoadError ? e.message : errorMessage(e));
+    } finally {
+      setImageBusy(false);
+    }
+  };
+
+  const onImageSide = (side: ImageSide) => {
+    if (image && image.side !== side) setImage({ ...image, side });
   };
 
   // ---------- CSV / TSV 取込（10-3）。新規のときだけ、メモ欄の下のリンクから ----------
@@ -245,6 +308,49 @@ export function WordForm() {
             {form.memo.length} / {LIMITS.memo}
           </span>
         </label>
+        <div className="field image-field" data-testid="image-field">
+          <span>画像（任意）</span>
+          {image && imageUrl && <img className="card-image" src={imageUrl} alt="カードの画像" data-testid="image-preview" />}
+          {image && (
+            <>
+              <div className="segmented" role="group" aria-label="画像を表示する面">
+                {(['front', 'back'] as ImageSide[]).map((side) => (
+                  <button key={side} type="button" aria-pressed={image.side === side} onClick={() => onImageSide(side)} data-testid={`image-side-${side}`}>
+                    {side === 'front' ? labels.front : labels.back}と一緒に表示
+                  </button>
+                ))}
+              </div>
+              <span className="small muted">
+                フラッシュカードでは、{labels.front}を選ぶと表面から、{labels.back}を選ぶと答えを表示したときに出ます。
+              </span>
+            </>
+          )}
+          {imageBusy ? (
+            <span className="small muted" role="status">
+              画像を読み込んでいます…
+            </span>
+          ) : (
+            <div className="btn-row">
+              <button type="button" className="btn-outline" onClick={() => imageRef.current?.click()} data-testid="image-pick">
+                {image ? '画像を変更' : '画像を選ぶ'}
+              </button>
+              {image && (
+                <button type="button" className="btn-outline-danger" onClick={() => setImage(null)} data-testid="image-remove">
+                  画像を削除
+                </button>
+              )}
+            </div>
+          )}
+          <input
+            ref={imageRef}
+            type="file"
+            accept="image/*"
+            style={{ display: 'none' }}
+            aria-label="画像ファイル"
+            data-testid="image-file"
+            onChange={(e) => void onPickImage(e.target.files?.[0])}
+          />
+        </div>
         {!isEdit && (
           <>
             <button type="button" className="link-muted" onClick={() => fileRef.current?.click()} data-testid="import-link">

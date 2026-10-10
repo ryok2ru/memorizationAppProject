@@ -15,6 +15,7 @@ import {
   getFolder,
   getSettings,
   getWord,
+  getWordImage,
   listDueWords,
   listFavoriteWords,
   listFolders,
@@ -397,5 +398,64 @@ describe('お気に入り（4-3、4-6、7-3）', () => {
   it('favorite が無いレコードは読み込み時に false として扱う', () => {
     const partial = { id: 'x', folderId: 'f', englishTerm: 'a', japaneseDefinition: 'b', memo: '', createdAt: now, updatedAt: now } as Word;
     expect(ensureFsrsFields(partial, now).favorite).toBe(false);
+  });
+});
+
+describe('images（4-8）', () => {
+  const bytes = (...n: number[]) => new Uint8Array(n).buffer;
+  const img = (side: 'front' | 'back' = 'back', ...n: number[]) => ({ data: bytes(...(n.length ? n : [1, 2, 3])), type: 'image/jpeg', side });
+  const read = async (id: string) => {
+    const r = await getWordImage(id);
+    return r ? { bytes: [...new Uint8Array(r.data)], side: r.side, type: r.type } : undefined;
+  };
+  const input = (folderId: string) => ({ folderId, englishTerm: 'a', japaneseDefinition: 'あ', memo: '' });
+
+  it('createWord で画像を一緒に保存し、渡さなければ画像なし', async () => {
+    const f = await createFolder('A', now);
+    const w1 = await createWord(input(f.id), now, img('front'));
+    const w2 = await createWord(input(f.id), now);
+    expect(await read(w1.id)).toEqual({ bytes: [1, 2, 3], side: 'front', type: 'image/jpeg' });
+    expect(await read(w2.id)).toBeUndefined();
+  });
+
+  it('updateWordText は undefined なら画像に触れず、値なら置き換え、null なら削除する', async () => {
+    const f = await createFolder('A', now);
+    const w = await createWord(input(f.id), now, img('back'));
+    await updateWordText(w.id, { englishTerm: 'b', japaneseDefinition: 'い', memo: '' }, now);
+    expect(await read(w.id)).toEqual({ bytes: [1, 2, 3], side: 'back', type: 'image/jpeg' });
+    await updateWordText(w.id, { englishTerm: 'b', japaneseDefinition: 'い', memo: '' }, now, img('front', 9));
+    expect(await read(w.id)).toEqual({ bytes: [9], side: 'front', type: 'image/jpeg' });
+    await updateWordText(w.id, { englishTerm: 'b', japaneseDefinition: 'い', memo: '' }, now, null);
+    expect(await read(w.id)).toBeUndefined();
+  });
+
+  it('単語・フォルダの削除で画像も消え、移動と進捗リセットでは残る', async () => {
+    const f = await createFolder('A', now);
+    const g = await createFolder('B', now);
+    const a = await createWord(input(f.id), now, img());
+    const b = await createWord(input(f.id), now, img());
+    const c = await createWord(input(g.id), now, img());
+    const d = await createWord(input(g.id), now, img());
+    await moveWords([a.id], g.id, now);
+    await resetProgress(null, now);
+    expect(await read(a.id)).toBeDefined();
+    await deleteWord(a.id);
+    expect(await read(a.id)).toBeUndefined();
+    await deleteWords([b.id]);
+    expect(await read(b.id)).toBeUndefined();
+    await deleteFolders([g.id]);
+    expect(await read(c.id)).toBeUndefined();
+    expect(await read(d.id)).toBeUndefined();
+  });
+
+  it('readSnapshot と replaceAll が画像を含む', async () => {
+    const f = await createFolder('A', now);
+    const w = await createWord(input(f.id), now, img('front', 7, 8));
+    const snap = await readSnapshot();
+    expect(snap.images.map((i) => i.wordId)).toEqual([w.id]);
+    await clearAll();
+    expect(await read(w.id)).toBeUndefined();
+    await replaceAll(snap);
+    expect(await read(w.id)).toEqual({ bytes: [7, 8], side: 'front', type: 'image/jpeg' });
   });
 });

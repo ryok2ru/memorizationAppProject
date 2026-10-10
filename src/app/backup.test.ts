@@ -4,12 +4,14 @@ import {
   BackupFormatError,
   SUPPORTED_SCHEMA_VERSIONS,
   backupFileName,
+  base64ToBytes,
+  bytesToBase64,
   exportBackup,
   exportResultMessage,
   importBackup,
   parseBackup,
 } from './backup';
-import { clearAll, createFolder, createWord, readSnapshot, saveRating, saveSettings } from '../db/repo';
+import { clearAll, createFolder, createWord, getWordImage, readSnapshot, saveRating, saveSettings } from '../db/repo';
 import { rate } from '../domain/fsrs';
 
 const now = new Date(2026, 8, 18, 9, 5, 0).getTime();
@@ -115,6 +117,67 @@ describe('backup', () => {
     expect(() => parseBackup(JSON.stringify({ app: 'Memoraq', schemaVersion: 2, folders: [] }))).toThrow(BackupFormatError);
     expect(() => parseBackup(JSON.stringify({ app: 'Memoraq', schemaVersion: 2, folders: [], words: [], reviewLogs: [] }))).not.toThrow();
     expect(backupFileName(new Date(2026, 0, 1, 0, 0).getTime())).toBe('memoraq-backup-20260101-0000.json');
+  });
+});
+
+describe('画像のバックアップ（4-8、10-2）', () => {
+  beforeEach(async () => {
+    await clearAll();
+  });
+
+  const fileWith = (images: unknown) =>
+    JSON.stringify({
+      app: 'Memoraq',
+      schemaVersion: 2,
+      folders: [{ id: 'f', name: 'A', createdAt: now, sortOrder: 0 }],
+      words: [{ id: 'w', folderId: 'f', englishTerm: 'a', japaneseDefinition: 'あ', memo: '', createdAt: now, updatedAt: now }],
+      reviewLogs: [],
+      images,
+    });
+
+  it('base64 の変換が往復する（区切りの 32KB をまたぐ長さを含む）', () => {
+    const src = new Uint8Array(70000).map((_, i) => (i * 7) % 256);
+    expect([...new Uint8Array(base64ToBytes(bytesToBase64(src.buffer)))]).toEqual([...src]);
+    expect(bytesToBase64(new Uint8Array([0, 255]).buffer)).toBe('AP8=');
+  });
+
+  it('画像を base64 で書き出し、読み込むとバイト列と表示する面が戻る', async () => {
+    const f = await createFolder('A', now);
+    const w = await createWord({ folderId: f.id, englishTerm: 'a', japaneseDefinition: 'あ', memo: '' }, now, {
+      data: new Uint8Array([1, 2, 250]).buffer,
+      type: 'image/jpeg',
+      side: 'front',
+    });
+    const { text } = await exportBackup(now);
+    expect(JSON.parse(text).images).toEqual([{ wordId: w.id, type: 'image/jpeg', side: 'front', updatedAt: now, data: 'AQL6' }]);
+    await clearAll();
+    await importBackup(parseBackup(text));
+    const img = await getWordImage(w.id);
+    expect(img?.side).toBe('front');
+    expect([...new Uint8Array(img!.data)]).toEqual([1, 2, 250]);
+  });
+
+  it('画像の無いファイルは画像なしで読み、schemaVersion は 2 のまま', () => {
+    const parsed = parseBackup(fileWith(undefined));
+    expect(parsed.images).toEqual([]);
+    expect(parsed.schemaVersion).toBe(2);
+  });
+
+  it('存在しない単語の画像は捨て、表示する面が不正なら裏、type が不正なら image/jpeg として読む', () => {
+    const parsed = parseBackup(
+      fileWith([
+        { wordId: 'w', type: 'text/html', side: 'x', updatedAt: 1, data: 'AQL6' },
+        { wordId: 'gone', type: 'image/jpeg', side: 'front', updatedAt: 1, data: 'AQL6' },
+      ]),
+    );
+    expect(parsed.images).toEqual([{ wordId: 'w', type: 'image/jpeg', side: 'back', updatedAt: 1, data: 'AQL6' }]);
+  });
+
+  it('画像の形が不正なファイルは読まない', () => {
+    expect(() => parseBackup(fileWith('x'))).toThrow(BackupFormatError);
+    expect(() => parseBackup(fileWith([null]))).toThrow(BackupFormatError);
+    expect(() => parseBackup(fileWith([{ wordId: 'w', side: 'back' }]))).toThrow(BackupFormatError);
+    expect(() => parseBackup(fileWith([{ wordId: 'w', side: 'back', data: '<not base64>' }]))).toThrow(BackupFormatError);
   });
 });
 

@@ -4,6 +4,8 @@ import { ProgressBar } from '../components/ProgressBar';
 import { QuitSheet } from '../components/QuitSheet';
 import { FavoriteButton } from '../components/FavoriteButton';
 import { useStudy } from '../useStudy';
+import { useWordImage } from '../hooks';
+import { imageVisible } from '../../app/image';
 import { preview } from '../../domain/fsrs';
 import { GRADES, GRADE_NAMES, type Grade } from '../../domain/types';
 
@@ -83,6 +85,7 @@ export function Flashcard() {
   const [confirmPx, setConfirmPx] = useState(FALLBACK_CONFIRM_PX);
   const gesture = useRef<{ id: number; x: number; y: number; axis: Axis | null } | null>(null);
   const cardRef = useRef<HTMLDivElement>(null);
+  const image = useWordImage(word?.id);
 
   // 出題位置が変わったら表面に戻す。取り消しで戻った位置は裏面（評価ボタン有効）で出す
   useEffect(() => {
@@ -277,6 +280,10 @@ export function Flashcard() {
             >
               {/* 評価色はカードの背景として文字の下に敷く（z-index: -1）。評価名はカードに重ねず、下の 1 行に出す */}
               {dragGrade && <div className={`swipe-fill grade-${dragGrade}`} style={{ opacity: visual.fillOpacity }} aria-hidden="true" />}
+              {/* 画像は付けた側の文字と一緒に出す。表面は表だけ、裏面は表と裏の両方が出ている（6-4） */}
+              {image && imageVisible(image.side, { front: true, back: flipped }) && (
+                <img className="card-image" src={image.url} alt="カードの画像" draggable={false} data-testid="card-image" />
+              )}
               {flipped ? (
                 <>
                   <div className="study-term small">{word.englishTerm}</div>

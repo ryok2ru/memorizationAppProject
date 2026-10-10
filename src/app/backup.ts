@@ -1,4 +1,4 @@
-import type { Folder, Word, ReviewLog, Settings } from '../domain/types';
+import type { Folder, Word, ReviewLog, Settings, WordImage, ImageSide } from '../domain/types';
 import { DEFAULT_SETTINGS } from '../domain/types';
 import { LEGACY_LABELS } from '../domain/labels';
 import { readSnapshot, replaceAll, type Snapshot } from '../db/repo';
@@ -12,6 +12,75 @@ export interface Backup {
   words: Word[];
   reviewLogs: ReviewLog[];
   settings: Settings;
+  /** カードの画像（4-8）。無いファイル（画像を持つ前に書き出したもの）は空として読む */
+  images?: BackupImage[];
+}
+
+/** バックアップ JSON の中の画像。バイト列は base64 の文字列にする（10-2） */
+export interface BackupImage {
+  wordId: string;
+  type: string;
+  side: ImageSide;
+  updatedAt: number;
+  /** 画像のバイト列の base64（data: の接頭辞は付けない） */
+  data: string;
+}
+
+const B64_CHUNK = 0x8000;
+
+export function bytesToBase64(data: ArrayBuffer): string {
+  const bytes = new Uint8Array(data);
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += B64_CHUNK) bin += String.fromCharCode(...bytes.subarray(i, i + B64_CHUNK));
+  return btoa(bin);
+}
+
+export function base64ToBytes(b64: string): ArrayBuffer {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes.buffer;
+}
+
+const toBackupImage = (img: WordImage): BackupImage => ({
+  wordId: img.wordId,
+  type: img.type,
+  side: img.side,
+  updatedAt: img.updatedAt,
+  data: bytesToBase64(img.data),
+});
+
+const fromBackupImage = (img: BackupImage): WordImage => ({
+  wordId: img.wordId,
+  type: img.type,
+  side: img.side,
+  updatedAt: img.updatedAt,
+  data: base64ToBytes(img.data),
+});
+
+const BASE64_RE = /^[A-Za-z0-9+/]*={0,2}$/;
+
+/**
+ * 読み込んだ画像を検証する（10-2）。形が不正なら BackupFormatError。
+ * 表示する面が無い・不正なら裏（既定）として読み、存在しない単語の画像は捨てる
+ */
+function parseImages(raw: unknown, wordIds: Set<string>): BackupImage[] {
+  if (raw === undefined) return [];
+  if (!Array.isArray(raw)) throw new BackupFormatError();
+  const result: BackupImage[] = [];
+  for (const item of raw as Partial<BackupImage>[]) {
+    if (typeof item !== 'object' || item === null) throw new BackupFormatError();
+    if (typeof item.wordId !== 'string' || typeof item.data !== 'string' || !BASE64_RE.test(item.data)) throw new BackupFormatError();
+    if (!wordIds.has(item.wordId)) continue;
+    result.push({
+      wordId: item.wordId,
+      type: typeof item.type === 'string' && item.type.startsWith('image/') ? item.type : 'image/jpeg',
+      side: item.side === 'front' ? 'front' : 'back',
+      updatedAt: typeof item.updatedAt === 'number' ? item.updatedAt : 0,
+      data: item.data,
+    });
+  }
+  return result;
 }
 
 /** 書き出す schemaVersion。Dexie のバージョンと同じ番号（4-7） */
@@ -29,6 +98,7 @@ export function buildBackup(snapshot: Snapshot, now = Date.now()): Backup {
     words: snapshot.words,
     reviewLogs: snapshot.reviewLogs,
     settings: snapshot.settings,
+    images: snapshot.images.map(toBackupImage),
   };
 }
 
@@ -77,6 +147,8 @@ export function parseBackup(text: string): Backup {
     words: b.words.map((w) => ({ ...w, favorite: w?.favorite === true })),
     reviewLogs: b.reviewLogs,
     settings,
+    // 画像が無いファイルは画像なしとして読む。schemaVersion は上げない（4-7、10-2）
+    images: parseImages(b.images, new Set(b.words.map((w) => w?.id))),
   };
 }
 
@@ -91,6 +163,7 @@ export async function importBackup(backup: Backup): Promise<void> {
     words: backup.words,
     reviewLogs: backup.reviewLogs,
     settings: backup.settings,
+    images: (backup.images ?? []).map(fromBackupImage),
   });
 }
 

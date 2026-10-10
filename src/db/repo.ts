@@ -1,6 +1,6 @@
 import Dexie from 'dexie';
 import { db } from './db';
-import type { Folder, Word, ReviewLog, Settings, CardState, FsrsFields, Scope } from '../domain/types';
+import type { Folder, Word, ReviewLog, Settings, CardState, FsrsFields, Scope, WordImage, ImageSide } from '../domain/types';
 import { DEFAULT_SETTINGS, isFavoritesScope, scopeFolderId } from '../domain/types';
 import { newCardFields, FSRS_KEYS } from '../domain/fsrs';
 import { DEFAULT_LABELS, type Labels } from '../domain/labels';
@@ -63,13 +63,14 @@ export async function deleteFolder(id: string): Promise<void> {
   await deleteFolders([id]);
 }
 
-/** フォルダと配下の単語・ReviewLog をまとめて 1 トランザクションで削除する（7-2 の一括削除） */
+/** フォルダと配下の単語・ReviewLog・画像をまとめて 1 トランザクションで削除する（7-2 の一括削除） */
 export async function deleteFolders(ids: string[]): Promise<void> {
   if (ids.length === 0) return;
-  await db.transaction('rw', db.folders, db.words, db.reviewLogs, async () => {
+  await db.transaction('rw', [db.folders, db.words, db.reviewLogs, db.images], async () => {
     const wordIds = await db.words.where('folderId').anyOf(ids).primaryKeys();
     if (wordIds.length > 0) {
       await db.reviewLogs.where('wordId').anyOf(wordIds).delete();
+      await db.images.bulkDelete(wordIds);
       await db.words.bulkDelete(wordIds);
     }
     await db.folders.bulkDelete(ids);
@@ -122,9 +123,27 @@ export function buildNewWord(input: NewWordInput, now = Date.now()): Word {
   };
 }
 
-export async function createWord(input: NewWordInput, now = Date.now()): Promise<Word> {
+/** 単語フォームで選んだ画像（4-8）。data は縮小済みのバイト列 */
+export interface WordImageInput {
+  data: ArrayBuffer;
+  type: string;
+  side: ImageSide;
+}
+
+/** 画像の保存・削除。image が null なら削除、undefined なら何もしない。呼び出し側のトランザクションの中で使う */
+async function writeImage(wordId: string, image: WordImageInput | null | undefined, now: number): Promise<void> {
+  if (image === undefined) return;
+  if (image === null) await db.images.delete(wordId);
+  else await db.images.put({ wordId, data: image.data, type: image.type, side: image.side, updatedAt: now });
+}
+
+/** 単語を追加する。画像を渡せば単語と同じトランザクションで保存する（7-4） */
+export async function createWord(input: NewWordInput, now = Date.now(), image?: WordImageInput | null): Promise<Word> {
   const word = buildNewWord(input, now);
-  await db.words.add(word);
+  await db.transaction('rw', db.words, db.images, async () => {
+    await db.words.add(word);
+    await writeImage(word.id, image, now);
+  });
   return word;
 }
 
@@ -134,13 +153,25 @@ export async function bulkAddWords(words: Word[]): Promise<void> {
   });
 }
 
-/** 単語フォームの保存。本文と、指定があれば所属フォルダ（7-4）を更新する。FSRS 項目は変えない */
+/**
+ * 単語フォームの保存。本文と、指定があれば所属フォルダ（7-4）を更新する。FSRS 項目は変えない。
+ * image は null なら画像を削除、値があれば置き換え、undefined なら画像に触れない（4-8）。1 トランザクションで行う
+ */
 export async function updateWordText(
   id: string,
   input: { englishTerm: string; japaneseDefinition: string; memo: string; folderId?: string },
   now = Date.now(),
+  image?: WordImageInput | null,
 ): Promise<void> {
-  await db.words.update(id, { ...input, updatedAt: now });
+  await db.transaction('rw', db.words, db.images, async () => {
+    await db.words.update(id, { ...input, updatedAt: now });
+    await writeImage(id, image, now);
+  });
+}
+
+/** カードの画像（4-8）。無ければ undefined */
+export async function getWordImage(wordId: string): Promise<WordImage | undefined> {
+  return db.images.get(wordId);
 }
 
 /** 複数の単語を別のフォルダへ移動（7-3）。folderId と updatedAt だけを 1 トランザクションで更新し、FSRS 項目と ReviewLog は変えない */
@@ -160,16 +191,17 @@ export async function setFavorites(ids: string[], favorite: boolean, now = Date.
   return db.transaction('rw', db.words, async () => db.words.where('id').anyOf(ids).modify({ favorite, updatedAt: now }));
 }
 
-/** 単語と ReviewLog を削除 */
+/** 単語と ReviewLog・画像を削除 */
 export async function deleteWord(id: string): Promise<void> {
   await deleteWords([id]);
 }
 
-/** 複数の単語と ReviewLog を 1 トランザクションで削除 */
+/** 複数の単語と ReviewLog・画像を 1 トランザクションで削除 */
 export async function deleteWords(ids: string[]): Promise<void> {
   if (ids.length === 0) return;
-  await db.transaction('rw', db.words, db.reviewLogs, async () => {
+  await db.transaction('rw', db.words, db.reviewLogs, db.images, async () => {
     await db.reviewLogs.where('wordId').anyOf(ids).delete();
+    await db.images.bulkDelete(ids);
     await db.words.bulkDelete(ids);
   });
 }
@@ -320,31 +352,36 @@ export interface Snapshot {
   words: Word[];
   reviewLogs: ReviewLog[];
   settings: Settings;
+  images: WordImage[];
 }
 
 export async function readSnapshot(): Promise<Snapshot> {
-  return db.transaction('r', db.folders, db.words, db.reviewLogs, db.settings, async () => ({
+  return db.transaction('r', [db.folders, db.words, db.reviewLogs, db.settings, db.images], async () => ({
     folders: await db.folders.toArray(),
     words: await db.words.toArray(),
     reviewLogs: await db.reviewLogs.toArray(),
     settings: await getSettings(),
+    images: await db.images.toArray(),
   }));
 }
 
+const ALL_TABLES = () => [db.folders, db.words, db.reviewLogs, db.settings, db.images];
+
 /** 全テーブルを消して置き換える */
 export async function replaceAll(snapshot: Snapshot): Promise<void> {
-  await db.transaction('rw', db.folders, db.words, db.reviewLogs, db.settings, async () => {
-    await Promise.all([db.folders.clear(), db.words.clear(), db.reviewLogs.clear(), db.settings.clear()]);
+  await db.transaction('rw', ALL_TABLES(), async () => {
+    await Promise.all(ALL_TABLES().map((t) => t.clear()));
     await db.folders.bulkAdd(snapshot.folders);
     await db.words.bulkAdd(snapshot.words);
     await db.reviewLogs.bulkAdd(snapshot.reviewLogs);
+    await db.images.bulkAdd(snapshot.images);
     await db.settings.put({ ...DEFAULT_SETTINGS, ...snapshot.settings, id: 'app', schemaVersion: 2 });
   });
 }
 
 export async function clearAll(): Promise<void> {
-  await db.transaction('rw', db.folders, db.words, db.reviewLogs, db.settings, async () => {
-    await Promise.all([db.folders.clear(), db.words.clear(), db.reviewLogs.clear(), db.settings.clear()]);
+  await db.transaction('rw', ALL_TABLES(), async () => {
+    await Promise.all(ALL_TABLES().map((t) => t.clear()));
   });
 }
 
