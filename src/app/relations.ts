@@ -127,45 +127,56 @@ export function edgeShape(section: Section, self: string, other: string): Pick<E
   return { kind: 'link', from: self, to: other };
 }
 
-/** 検索で出す最大件数（7-12-2） */
-export const SEARCH_MAX = 50;
-/** 検索欄が空のときに出す最大件数（7-12-2） */
-export const BROWSE_MAX = 100;
-
 /** 名前の文字順。localeCompare(…, 'ja') と同じ並びで、全件を並べても速いよう 1 つだけ作る */
 const nameOrder = new Intl.Collator('ja');
 
-/** 追加ダイアログの候補（7-12-2）。rest は上限を超えて出さなかった件数 */
-export interface SearchResult {
-  items: Candidate[];
-  rest: number;
-}
-
-/**
- * 追加ダイアログの候補（7-12-2）。全フォルダのカード（表・裏の部分一致）とノード（名前の部分一致）。
- * 大文字小文字は区別しない。名前の文字順で、検索は最大 50 件、空欄なら全件のうち最大 100 件を返し、押せない理由を付ける
- */
-export function searchCandidates(data: SearchData, query: string, self: string, section: Section): SearchResult {
-  const q = query.trim().toLowerCase();
-  const items: ItemRef[] = [
-    ...data.words
-      .filter((w) => !q || w.englishTerm.toLowerCase().includes(q) || w.japaneseDefinition.toLowerCase().includes(q))
-      .map((w) => cardRef(w, data.folders)),
-    ...data.nodes.filter((n) => !q || n.name.toLowerCase().includes(q)).map(nodeRef),
-  ];
-  const max = q ? SEARCH_MAX : BROWSE_MAX;
-  const shown = items
+/** 名前の文字順に並べ、押せない理由（自分自身・関係あり・循環）を付ける */
+function toCandidates(data: SearchData, items: ItemRef[], self: string, section: Section): Candidate[] {
+  return items
     .sort((a, b) => nameOrder.compare(a.name, b.name))
-    .slice(0, max)
     .map((item) => {
       const s = edgeShape(section, self, item.id);
       return { item, block: relationBlock(data.edges, s.kind, s.from, s.to) };
     });
-  return { items: shown, rest: items.length - shown.length };
 }
 
 /**
- * 「ノードとして作成」を出すか（7-12-2）。入力が空でなく 200 文字以内で、
+ * 追加ダイアログの候補（7-12-2）。上限は設けない。
+ * 検索欄が空なら、表示中の項目と同じフォルダのカード（表示中の項目がノードなら全フォルダのカード）。ノードは出さない。
+ * 検索中は、全フォルダのカード（表・裏の部分一致）とノード（名前の部分一致）。大文字小文字は区別しない
+ */
+export function searchCandidates(data: SearchData, query: string, self: string, section: Section): Candidate[] {
+  const q = query.trim().toLowerCase();
+  if (!q) {
+    const folderId = data.words.find((w) => w.id === self)?.folderId;
+    const words = folderId == null ? data.words : data.words.filter((w) => w.folderId === folderId);
+    return toCandidates(data, words.map((w) => cardRef(w, data.folders)), self, section);
+  }
+  const items: ItemRef[] = [
+    ...data.words
+      .filter((w) => w.englishTerm.toLowerCase().includes(q) || w.japaneseDefinition.toLowerCase().includes(q))
+      .map((w) => cardRef(w, data.folders)),
+    ...data.nodes.filter((n) => n.name.toLowerCase().includes(q)).map(nodeRef),
+  ];
+  return toCandidates(data, items, self, section);
+}
+
+/**
+ * 名前（カードは表）が入力と完全に一致する項目（7-12-2）。trim し、大文字小文字は区別しない。
+ * 「ノードを追加」で、同じ名前の項目があることを見せるために使う
+ */
+export function sameNameCandidates(data: SearchData, name: string, self: string, section: Section): Candidate[] {
+  const q = name.trim().toLowerCase();
+  if (!q) return [];
+  const items: ItemRef[] = [
+    ...data.words.filter((w) => w.englishTerm.trim().toLowerCase() === q).map((w) => cardRef(w, data.folders)),
+    ...data.nodes.filter((n) => n.name.trim().toLowerCase() === q).map(nodeRef),
+  ];
+  return toCandidates(data, items, self, section);
+}
+
+/**
+ * 検索の一覧に「ノードとして作成」を出すか（7-12-2）。入力が空でなく 200 文字以内で、
  * 名前（カードは表）が入力と完全に一致する項目が無いとき（trim し、大文字小文字は区別しない）
  */
 export function canCreateNode(data: SearchData, query: string): boolean {

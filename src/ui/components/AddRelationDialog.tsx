@@ -4,13 +4,15 @@ import { LinkFields } from './EditLinkSheet';
 import { ADD_TITLES } from './RelationList';
 import { errorMessage } from '../hooks';
 import type { LinkDirection, RelationBlock, Section } from '../../domain/relations';
+import { validateNodeName } from '../../domain/validation';
 import {
   addRelation,
   canCreateNode,
   labelSuggestions,
   loadSearchData,
+  sameNameCandidates,
   searchCandidates,
-  type SearchResult,
+  type Candidate,
   type RelationTarget,
   type SearchData,
 } from '../../app/relations';
@@ -42,10 +44,13 @@ interface LinkTarget {
  */
 export const AddRelationDialog = forwardRef<AddRelationDialogHandle, Props>(function AddRelationDialog({ selfId, onAdded }, handle) {
   const ref = useRef<HTMLDialogElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const [section, setSection] = useState<Section>('parents');
   const [data, setData] = useState<SearchData | null>(null);
   const [query, setQuery] = useState('');
   const [debounced, setDebounced] = useState('');
+  // 「ノードを追加」で、検索欄をノードの名前の入力欄に切り替えているか
+  const [nodeMode, setNodeMode] = useState(false);
   const [link, setLink] = useState<LinkTarget | null>(null);
   const [dir, setDir] = useState<LinkDirection>('none');
   const [label, setLabel] = useState('');
@@ -60,6 +65,7 @@ export const AddRelationDialog = forwardRef<AddRelationDialogHandle, Props>(func
       setSection(next);
       setQuery('');
       setDebounced('');
+      setNodeMode(false);
       setLink(null);
       setDir('none');
       setLabel('');
@@ -77,12 +83,13 @@ export const AddRelationDialog = forwardRef<AddRelationDialogHandle, Props>(func
     return () => clearTimeout(t);
   }, [query]);
 
-  const result: SearchResult = useMemo(
-    () => (data ? searchCandidates(data, debounced, selfId, section) : { items: [], rest: 0 }),
-    [data, debounced, selfId, section],
-  );
-  const browsing = debounced.trim() === '';
+  const candidates: Candidate[] = useMemo(() => {
+    if (!data) return [];
+    return nodeMode ? sameNameCandidates(data, debounced, selfId, section) : searchCandidates(data, debounced, selfId, section);
+  }, [data, debounced, selfId, section, nodeMode]);
+  const name = debounced.trim();
   const showCreate = data != null && canCreateNode(data, debounced);
+  const nameError = nodeMode && name ? validateNodeName(name) : null;
   const suggestions = useMemo(() => (data ? labelSuggestions(data.edges) : []), [data]);
 
   const save = async (target: RelationTarget, linkValue?: { dir: LinkDirection; label: string }) => {
@@ -106,6 +113,67 @@ export const AddRelationDialog = forwardRef<AddRelationDialogHandle, Props>(func
     else void save(target);
   };
 
+  /** 検索とノードの名前の入力を切り替える。入力は空にする */
+  const switchMode = (toNode: boolean) => {
+    setNodeMode(toNode);
+    setQuery('');
+    setDebounced('');
+    setMessage(null);
+    // 名前を入れるために押したので、押した処理の中で同期的にフォーカスしてキーボードを出す（iOS）
+    if (toNode) inputRef.current?.focus();
+  };
+
+  const back = () => {
+    if (link) setLink(null);
+    else switchMode(false);
+  };
+
+  const row = (c: Candidate) => (
+    <li key={c.item.id}>
+      <button type="button" className="candidate-row" disabled={c.block != null || busy} onClick={() => choose({ id: c.item.id }, c.item.name)}>
+        <span className="row-text">
+          <span className={`row-title${c.item.kind === 'node' ? ' is-node' : ''}`}>{c.item.name}</span>
+          <span className="row-sub">{c.item.kind === 'node' ? 'ノード' : `${c.item.back}・${c.item.folderName}`}</span>
+        </span>
+        {c.block && <span className="row-side">{BLOCK_TEXT[c.block]}</span>}
+      </button>
+    </li>
+  );
+
+  const createRow = (
+    <li>
+      <button type="button" className="candidate-row candidate-create" disabled={busy} onClick={() => choose({ newNodeName: name }, name)} data-testid="create-node">
+        ＋「{name}」をノードとして作成
+      </button>
+    </li>
+  );
+
+  let list;
+  if (nodeMode) {
+    // 名前が同じ項目があっても作れる（4-10）。あれば作成の行の下に出して、存在が分かるようにする
+    list = (
+      <>
+        {nameError && <p className="error">{nameError}</p>}
+        {name && !nameError && <ul className="candidate-list">{createRow}</ul>}
+        {candidates.length > 0 && (
+          <>
+            <h3 className="candidate-caption">同じ名前の項目</h3>
+            <ul className="candidate-list" aria-label="同じ名前の項目" data-testid="same-name">
+              {candidates.map(row)}
+            </ul>
+          </>
+        )}
+      </>
+    );
+  } else {
+    list = (
+      <ul className="candidate-list" aria-label="候補">
+        {candidates.map(row)}
+        {showCreate && createRow}
+      </ul>
+    );
+  }
+
   return (
     <dialog
       className="add-relation-dialog"
@@ -120,8 +188,8 @@ export const AddRelationDialog = forwardRef<AddRelationDialogHandle, Props>(func
       data-testid="add-relation-dialog"
     >
       <div className="card-popup-head">
-        {link && (
-          <button type="button" className="btn-text sheet-back" aria-label="検索に戻る" onClick={() => setLink(null)}>
+        {(link || nodeMode) && (
+          <button type="button" className="btn-text sheet-back" aria-label={link ? '戻る' : '検索に戻る'} onClick={back}>
             ‹
           </button>
         )}
@@ -130,65 +198,30 @@ export const AddRelationDialog = forwardRef<AddRelationDialogHandle, Props>(func
           ✕
         </button>
       </div>
+      {/* 「ノードを追加」は検索欄の上。押すと検索欄がノードの名前の入力欄に変わる */}
+      {!link && !nodeMode && (
+        <button type="button" className="btn-outline add-relation-node" onClick={() => switchMode(true)} data-testid="add-node">
+          ノードを追加
+        </button>
+      )}
       {/* 検索欄は一覧と一緒にスクロールさせず、見出しの下に置いたままにする。連結の次の段では隠す */}
       <input
-        type="search"
-        enterKeyHint="search"
+        ref={inputRef}
+        type={nodeMode ? 'text' : 'search'}
+        enterKeyHint={nodeMode ? 'done' : 'search'}
         className="add-relation-search"
-        placeholder="名前で検索"
-      hidden={link != null}
+        placeholder={nodeMode ? 'ノードの名前' : '名前で検索'}
+        hidden={link != null}
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
         }}
-        aria-label="名前で検索"
+        aria-label={nodeMode ? 'ノードの名前' : '名前で検索'}
         data-testid="add-relation-search"
       />
       <div className="card-popup-body">
-        {link ? (
-          <LinkFields dir={dir} label={label} suggestions={suggestions} onDir={setDir} onLabel={setLabel} />
-        ) : (
-          <>
-            <ul className="candidate-list" aria-label="候補">
-              {result.items.map((c) => (
-                <li key={c.item.id}>
-                  <button
-                    type="button"
-                    className="candidate-row"
-                    disabled={c.block != null || busy}
-                    onClick={() => choose({ id: c.item.id }, c.item.name)}
-                  >
-                    <span className="row-text">
-                      <span className={`row-title${c.item.kind === 'node' ? ' is-node' : ''}`}>{c.item.name}</span>
-                      <span className="row-sub">{c.item.kind === 'node' ? 'ノード' : `${c.item.back}・${c.item.folderName}`}</span>
-                    </span>
-                    {c.block && <span className="row-side">{BLOCK_TEXT[c.block]}</span>}
-                  </button>
-                </li>
-              ))}
-              {showCreate && (
-                <li>
-                  <button
-                    type="button"
-                    className="candidate-row candidate-create"
-                    disabled={busy}
-                    onClick={() => choose({ newNodeName: debounced.trim() }, debounced.trim())}
-                    data-testid="create-node"
-                  >
-                    ＋「{debounced.trim()}」をノードとして作成
-                  </button>
-                </li>
-              )}
-            </ul>
-            {/* 空欄のときは先頭 100 件だけを出し、残りは検索で絞り込んでもらう（7-12-2） */}
-            {browsing && result.rest > 0 && (
-              <p className="small muted candidate-rest" data-testid="candidate-rest">
-                ほか {result.rest}件。検索で絞り込めます
-              </p>
-            )}
-          </>
-        )}
+        {link ? <LinkFields dir={dir} label={label} suggestions={suggestions} onDir={setDir} onLabel={setLabel} /> : list}
         {message && <p className="error">{message}</p>}
       </div>
       {link && (

@@ -31,7 +31,8 @@ export function RelationList({ self, view, mode, onOpen, onAdd, onRemove, onEdit
         <section key={section} className="relation-section" aria-label={SECTION_TITLES[section]}>
           <div className="relation-head">
             <h2>{SECTION_TITLES[section]}</h2>
-            {mode === 'view' && onAdd && (
+            {/* 「＋」は関係の編集中だけ出す（7-12） */}
+            {mode === 'edit' && onAdd && (
               <button type="button" className="btn-icon relation-add" aria-label={ADD_TITLES[section]} onClick={() => onAdd(section)} data-testid={`add-${section}`}>
                 ＋
               </button>

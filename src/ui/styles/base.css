@@ -1822,6 +1822,18 @@ h2.heading {
   margin-top: 12px;
 }
 
+/* カード詳細画面（7-12）だけ、メモの本文を上下の横線ではさむ（「メモ」の下と、本文の下＝学習の状態の枠の上）。ポップアップ（7-14）は変えない */
+.detail-page .detail-memo h3 {
+  margin-bottom: 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.detail-page .detail-memo p {
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
 /* 学習の状態の枠（7-12） */
 .detail-state {
   display: flex;
@@ -1978,6 +1990,13 @@ h2.heading {
   border-top: 1px solid var(--border);
 }
 
+/* 「ノードを追加」は検索欄の上に固定する（7-12-2） */
+.add-relation-dialog .add-relation-node {
+  flex: none;
+  margin: 12px 16px 0;
+  width: calc(100% - 32px);
+}
+
 /* 入力欄の共通の width: 100% より強く当てるため、ダイアログのクラスから指定する */
 .add-relation-dialog .add-relation-search {
   flex: none;
@@ -2012,6 +2031,14 @@ h2.heading {
 .candidate-create {
   color: var(--accent);
   font-weight: 600;
+}
+
+/* 「ノードを追加」で、名前が同じ項目の一覧の見出し（7-12-2） */
+.candidate-caption {
+  margin: 8px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
 }
 
 .label-suggestions {

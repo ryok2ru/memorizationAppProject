@@ -33,9 +33,8 @@ import {
   orphanCountIfFoldersDeleted,
   orphansIfEdgeDeleted,
   orphansIfItemsDeleted,
+  sameNameCandidates,
   searchCandidates,
-  SEARCH_MAX,
-  BROWSE_MAX,
   showFolderName,
   swipeDeletedMessage,
   withOrphanSuffix,
@@ -275,35 +274,35 @@ describe('関係の追加ダイアログの検索（7-12-2）', () => {
     const data = await loadSearchData();
 
     // 裏の部分一致・大文字小文字を無視
-    expect(searchCandidates(data, 'MAMMAL', dog.id, 'links').items.map((c) => c.item.name)).toEqual(['哺乳類']);
-    const forDog = searchCandidates(data, 'a', dog.id, 'children').items;
+    expect(searchCandidates(data, 'MAMMAL', dog.id, 'links').map((c) => c.item.name)).toEqual(['哺乳類']);
+    const forDog = searchCandidates(data, 'a', dog.id, 'children');
     const byName = (name: string) => forDog.find((c) => c.item.name === name)!;
     expect(byName('cat').block).toBeNull();
     expect(byName('Animal lover').block).toBe('exists');
     expect(byName('Animal lover').item.kind).toBe('node');
     // 哺乳類（dog の上位）を dog の下位にすると循環
-    expect(searchCandidates(data, '哺乳', dog.id, 'children').items[0].block).toBe('exists');
-    expect(searchCandidates(data, '哺乳', cat.id, 'children').items[0].block).toBeNull();
-    expect(searchCandidates(data, 'dog', dog.id, 'links').items[0].block).toBe('self');
-    // 空欄なら全項目を名前順に出す
-    const all = searchCandidates(data, '  ', dog.id, 'links');
-    expect(all.items.map((c) => c.item.name)).toEqual(['Animal lover', 'cat', 'dog', '哺乳類']);
-    expect(all.rest).toBe(0);
+    expect(searchCandidates(data, '哺乳', dog.id, 'children')[0].block).toBe('exists');
+    expect(searchCandidates(data, '哺乳', cat.id, 'children')[0].block).toBeNull();
+    expect(searchCandidates(data, 'dog', dog.id, 'links')[0].block).toBe('self');
+    // 空欄なら同じフォルダのカードだけを名前順に出す（別フォルダの哺乳類とノードは出さない）
+    const browse = searchCandidates(data, '  ', dog.id, 'links');
+    expect(browse.map((c) => c.item.name)).toEqual(['cat', 'dog']);
+    // 表示中の項目がノードなら、全フォルダのカード（ノードは出さない）
+    const fromNode = searchCandidates(data, '', await nodeId('Animal lover'), 'links');
+    expect(fromNode.map((c) => c.item.name)).toEqual(['cat', 'dog', '哺乳類']);
   });
 
-  it('空欄は 100 件、検索は 50 件までに抑え、残りの件数を返す', async () => {
+  it('空欄でも検索でも件数の上限を設けない', async () => {
     const { f, dog } = await setup();
     for (let i = 0; i < 120; i++) {
       await createWord({ folderId: f.id, englishTerm: `w${String(i).padStart(3, '0')}`, japaneseDefinition: '語', memo: '' }, now);
     }
     const data = await loadSearchData();
-    const all = searchCandidates(data, '', dog.id, 'links');
-    expect(all.items).toHaveLength(BROWSE_MAX);
-    expect(all.rest).toBe(123 - BROWSE_MAX);
+    // 同じフォルダ（英語）の dog・cat と w000〜w119
+    expect(searchCandidates(data, '', dog.id, 'links')).toHaveLength(122);
     const found = searchCandidates(data, 'w', dog.id, 'links');
-    expect(found.items).toHaveLength(SEARCH_MAX);
-    expect(found.items[0].item.name).toBe('w000');
-    expect(found.rest).toBe(120 - SEARCH_MAX);
+    expect(found).toHaveLength(120);
+    expect(found[0].item.name).toBe('w000');
   });
 
   it('循環になる項目を見分ける', async () => {
@@ -312,7 +311,7 @@ describe('関係の追加ダイアログの検索（7-12-2）', () => {
     await addRelation(dog.id, 'children', { id: cat.id }, undefined, now);
     const data = await loadSearchData();
     // cat の下位に哺乳類を置くと循環（哺乳類 → dog → cat → 哺乳類）
-    expect(searchCandidates(data, '哺乳', cat.id, 'children').items[0].block).toBe('cycle');
+    expect(searchCandidates(data, '哺乳', cat.id, 'children')[0].block).toBe('cycle');
   });
 
   it('名前が完全に一致する項目が無いときだけ「ノードとして作成」を出す', async () => {
@@ -322,5 +321,22 @@ describe('関係の追加ダイアログの検索（7-12-2）', () => {
     expect(canCreateNode(data, 'do')).toBe(true);
     expect(canCreateNode(data, '  ')).toBe(false);
     expect(canCreateNode(data, 'x'.repeat(201))).toBe(false);
+  });
+
+  it('ノードを追加するとき、名前が完全に一致するカードとノードを押せない理由付きで返す', async () => {
+    const { dog, cat } = await setup();
+    await addRelation(dog.id, 'links', { newNodeName: 'Dog' }, undefined, now);
+    const data = await loadSearchData();
+    const same = sameNameCandidates(data, '  DOG ', cat.id, 'links');
+    expect(same.map((c) => [c.item.name, c.item.kind])).toEqual([
+      ['dog', 'card'],
+      ['Dog', 'node'],
+    ]);
+    expect(same.every((c) => c.block === null)).toBe(true);
+    // 表示中の項目自身と、すでに関係がある項目は押せない
+    expect(sameNameCandidates(data, 'dog', dog.id, 'links').map((c) => c.block)).toEqual(['self', 'exists']);
+    // 部分一致や空欄では返さない
+    expect(sameNameCandidates(data, 'do', cat.id, 'links')).toEqual([]);
+    expect(sameNameCandidates(data, '  ', cat.id, 'links')).toEqual([]);
   });
 });
