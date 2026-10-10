@@ -1811,6 +1811,17 @@ h2.heading {
   -webkit-touch-callout: none;
 }
 
+/* カード詳細画面（7-12）だけ、表と裏（ノードは名前）を中央にそろえる。メモは左揃えのまま。ポップアップ（7-14）は変えない */
+.detail-page .detail-front,
+.detail-page .detail-back {
+  text-align: center;
+}
+
+/* 裏と画像の間は gap の 2 倍（12px + 12px = 24px） */
+.detail-page .detail-back + .card-image {
+  margin-top: 12px;
+}
+
 /* 学習の状態の枠（7-12） */
 .detail-state {
   display: flex;
@@ -1938,16 +1949,21 @@ h2.heading {
   padding: 0;
 }
 
-/* ---------- 関係の追加シート・連結の編集シート（7-12-2、7-12-3） ---------- */
+/* ---------- 関係の追加ダイアログ・連結の編集シート（7-12-2、7-12-3） ---------- */
 
-.add-relation-sheet[open] {
-  height: 85dvh;
+/* 関係の追加ダイアログはカードのポップアップ（7-14）と同じ中央のダイアログ。見出し行と検索欄を固定し、一覧だけをスクロールする */
+.add-relation-dialog .card-popup-head h2 {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 
-.sheet .sheet-title-row {
+.add-relation-dialog .card-popup-body {
   display: flex;
-  align-items: center;
-  gap: 4px;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 12px;
 }
 
 .sheet-back {
@@ -1956,8 +1972,17 @@ h2.heading {
   padding: 0 8px 0 0;
 }
 
-.add-relation-search {
+.add-relation-foot {
   flex: none;
+  padding: 12px 16px 16px;
+  border-top: 1px solid var(--border);
+}
+
+/* 入力欄の共通の width: 100% より強く当てるため、ダイアログのクラスから指定する */
+.add-relation-dialog .add-relation-search {
+  flex: none;
+  margin: 12px 16px 0;
+  width: calc(100% - 32px);
 }
 
 .candidate-list {
@@ -2006,13 +2031,15 @@ h2.heading {
 
 /* ---------- カードのポップアップ（7-14） ---------- */
 
-dialog.card-popup {
+dialog.card-popup,
+dialog.add-relation-dialog {
   width: min(92vw, 420px);
   height: 80dvh;
   padding: 0;
 }
 
-dialog.card-popup[open] {
+dialog.card-popup[open],
+dialog.add-relation-dialog[open] {
   display: flex;
   flex-direction: column;
 }

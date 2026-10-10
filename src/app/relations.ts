@@ -99,9 +99,9 @@ export async function loadRelationView(id: string): Promise<RelationView> {
   return buildRelationView(id, edges, await loadItemRefs(others));
 }
 
-// ---------- 関係の追加シート（7-12-2） ----------
+// ---------- 関係の追加ダイアログ（7-12-2） ----------
 
-/** 追加シートの検索結果の 1 行 */
+/** 追加ダイアログの候補の 1 行 */
 export interface Candidate {
   item: ItemRef;
   /** 押せない理由。自分自身・関係あり・循環 */
@@ -129,27 +129,39 @@ export function edgeShape(section: Section, self: string, other: string): Pick<E
 
 /** 検索で出す最大件数（7-12-2） */
 export const SEARCH_MAX = 50;
+/** 検索欄が空のときに出す最大件数（7-12-2） */
+export const BROWSE_MAX = 100;
+
+/** 名前の文字順。localeCompare(…, 'ja') と同じ並びで、全件を並べても速いよう 1 つだけ作る */
+const nameOrder = new Intl.Collator('ja');
+
+/** 追加ダイアログの候補（7-12-2）。rest は上限を超えて出さなかった件数 */
+export interface SearchResult {
+  items: Candidate[];
+  rest: number;
+}
 
 /**
- * 追加シートの検索（7-12-2）。全フォルダのカード（表・裏の部分一致）とノード（名前の部分一致）。
- * 大文字小文字は区別しない。最大 50 件を名前の文字順で返し、押せない理由を付ける
+ * 追加ダイアログの候補（7-12-2）。全フォルダのカード（表・裏の部分一致）とノード（名前の部分一致）。
+ * 大文字小文字は区別しない。名前の文字順で、検索は最大 50 件、空欄なら全件のうち最大 100 件を返し、押せない理由を付ける
  */
-export function searchCandidates(data: SearchData, query: string, self: string, section: Section): Candidate[] {
+export function searchCandidates(data: SearchData, query: string, self: string, section: Section): SearchResult {
   const q = query.trim().toLowerCase();
-  if (!q) return [];
   const items: ItemRef[] = [
     ...data.words
-      .filter((w) => w.englishTerm.toLowerCase().includes(q) || w.japaneseDefinition.toLowerCase().includes(q))
+      .filter((w) => !q || w.englishTerm.toLowerCase().includes(q) || w.japaneseDefinition.toLowerCase().includes(q))
       .map((w) => cardRef(w, data.folders)),
-    ...data.nodes.filter((n) => n.name.toLowerCase().includes(q)).map(nodeRef),
+    ...data.nodes.filter((n) => !q || n.name.toLowerCase().includes(q)).map(nodeRef),
   ];
-  return items
-    .sort((a, b) => a.name.localeCompare(b.name, 'ja'))
-    .slice(0, SEARCH_MAX)
+  const max = q ? SEARCH_MAX : BROWSE_MAX;
+  const shown = items
+    .sort((a, b) => nameOrder.compare(a.name, b.name))
+    .slice(0, max)
     .map((item) => {
       const s = edgeShape(section, self, item.id);
       return { item, block: relationBlock(data.edges, s.kind, s.from, s.to) };
     });
+  return { items: shown, rest: items.length - shown.length };
 }
 
 /**

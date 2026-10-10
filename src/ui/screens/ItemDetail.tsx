@@ -6,7 +6,7 @@ import { FavoriteButton } from '../components/FavoriteButton';
 import { CardFields, useCardEditor } from '../components/CardFields';
 import { DetailTabs, type DetailTab } from '../components/DetailTabs';
 import { RelationList } from '../components/RelationList';
-import { AddRelationSheet, type AddRelationSheetHandle } from '../components/AddRelationSheet';
+import { AddRelationDialog, type AddRelationDialogHandle } from '../components/AddRelationDialog';
 import { EditLinkSheet } from '../components/EditLinkSheet';
 import { MOVED_MS, UNDO_MS, movedMessage } from './WordList';
 import { errorMessage, useWordImage } from '../hooks';
@@ -95,7 +95,7 @@ export function ItemDetail({ kind, id }: { kind: ItemKind; id: string }) {
   const [nodeName, setNodeName] = useState('');
   const [imageVersion, setImageVersion] = useState(0);
   const editor = useCardEditor();
-  const sheetRef = useRef<AddRelationSheetHandle>(null);
+  const sheetRef = useRef<AddRelationDialogHandle>(null);
   const undoTimer = useRef<ReturnType<typeof setTimeout>>();
   const image = useWordImage(kind === 'card' ? id : undefined, imageVersion);
 
@@ -411,7 +411,7 @@ export function ItemDetail({ kind, id }: { kind: ItemKind; id: string }) {
         </>
       ) : (
         <>
-          <div className="detail-card" data-testid="card-detail">
+          <div className="detail-card detail-page" data-testid="card-detail">
             <div className="detail-front">{word.englishTerm}</div>
             <div className="detail-back">{word.japaneseDefinition}</div>
             {/* 画像は表示する面の設定にかかわらず出す（7-12） */}
@@ -445,7 +445,7 @@ export function ItemDetail({ kind, id }: { kind: ItemKind; id: string }) {
           </button>
         </>
       ) : (
-        <div className="detail-card">
+        <div className="detail-card detail-page">
           <div className="detail-front is-node">{node.name}</div>
           <button type="button" className="btn-outline" disabled={folders.length === 0} onClick={startToCard} data-testid="to-card">
             カードにする
@@ -456,6 +456,17 @@ export function ItemDetail({ kind, id }: { kind: ItemKind; id: string }) {
   } else {
     body = (
       <>
+        {/* 関係側でも名前を出し続ける（7-12）。ここは表示だけで、表と裏はカード側の編集でだけ変える */}
+        <div className="detail-card detail-page" data-testid="relation-names">
+          {word ? (
+            <>
+              <div className="detail-front">{word.englishTerm}</div>
+              <div className="detail-back">{word.japaneseDefinition}</div>
+            </>
+          ) : (
+            <div className="detail-front is-node">{node!.name}</div>
+          )}
+        </div>
         {mode === 'view' && view.count > 0 && (
           <div className="graph-link">
             <button type="button" className="btn-text" onClick={() => navigate(`/graph/${id}?mode=relation`)} data-testid="open-graph">
@@ -500,7 +511,7 @@ export function ItemDetail({ kind, id }: { kind: ItemKind; id: string }) {
         </div>
       )}
 
-      <AddRelationSheet ref={sheetRef} selfId={id} onAdded={() => void load()} />
+      <AddRelationDialog ref={sheetRef} selfId={id} onAdded={() => void load()} />
       <EditLinkSheet
         selfId={id}
         row={editLink}
