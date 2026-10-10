@@ -294,7 +294,7 @@ export function Home() {
       {data && (
         <>
           {/* 上からストリーク、サマリーカード（7-2） */}
-          <div className="center" data-testid="streak">
+          <div className="streak-box center" data-testid="streak">
             {streakMessage(data.streak)}
           </div>
 

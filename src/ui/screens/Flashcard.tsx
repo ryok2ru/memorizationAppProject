@@ -153,9 +153,9 @@ export function Flashcard() {
     if (!g || g.id !== e.pointerId) return;
     gesture.current = null;
     if (!g.axis) {
-      // 10px 未満はタップ。表面なら裏返す
+      // 10px 未満はタップ。表面なら裏面に、裏面なら表面に切り替える
       setDrag(null);
-      if (!flipped) setFlipped(true);
+      setFlipped((f) => !f);
       return;
     }
     const d = g.axis === 'x' ? e.clientX - g.x : e.clientY - g.y;
@@ -200,6 +200,9 @@ export function Flashcard() {
     </span>
   ) : null;
   const side = dragGrade ? labelSide(dragGrade) : null;
+  const cardImage = image ? (
+    <img className="card-image" src={image.url} alt="カードの画像" draggable={false} data-testid="card-image" />
+  ) : null;
 
   return (
     <div className="screen study-screen">
@@ -264,7 +267,7 @@ export function Flashcard() {
               className={cardClass}
               role="button"
               tabIndex={0}
-              aria-label={flipped ? '裏面' : '表面。タップで答えを表示。スワイプで評価'}
+              aria-label={flipped ? '裏面。タップで表面に戻す。スワイプで評価' : '表面。タップで答えを表示。スワイプで評価'}
               data-testid="study-card"
               data-flipped={flipped}
               data-swipe-grade={dragGrade ?? undefined}
@@ -273,7 +276,7 @@ export function Flashcard() {
               onPointerUp={onPointerUp}
               onPointerCancel={onPointerCancel}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') setFlipped(true);
+                if (e.key === 'Enter' || e.key === ' ') setFlipped((f) => !f);
               }}
               onDragStart={(e) => e.preventDefault()}
               style={transform ? { transform } : undefined}
@@ -281,17 +284,20 @@ export function Flashcard() {
               {/* 評価色はカードの背景として文字の下に敷く（z-index: -1）。評価名はカードに重ねず、下の 1 行に出す */}
               {dragGrade && <div className={`swipe-fill grade-${dragGrade}`} style={{ opacity: visual.fillOpacity }} aria-hidden="true" />}
               {/* 画像は付けた側の文字と一緒に出す。表面は表だけ、裏面は表と裏の両方が出ている（6-4） */}
-              {image && imageVisible(image.side, { front: true, back: flipped }) && (
-                <img className="card-image" src={image.url} alt="カードの画像" draggable={false} data-testid="card-image" />
-              )}
               {flipped ? (
                 <>
+                  {image && imageVisible(image.side, { front: true, back: true }) && cardImage}
                   <div className="study-term small">{word.englishTerm}</div>
                   <div className="study-def">{word.japaneseDefinition}</div>
                   {word.memo && <div className="study-memo">{word.memo}</div>}
                 </>
               ) : (
-                <div className="study-term">{word.englishTerm}</div>
+                <>
+                  {/* 表をカードの上下中央に置き、画像はその上。画像が高くて上側に収まらないときは表が下がる */}
+                  <div className="card-upper">{image && imageVisible(image.side, { front: true, back: false }) && cardImage}</div>
+                  <div className="study-term">{word.englishTerm}</div>
+                  <div className="card-lower" />
+                </>
               )}
             </div>
           </div>
