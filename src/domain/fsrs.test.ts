@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fromCard, isFinitePayload, newCardFields, preview, previewLabel, rate, retrievability, toCard } from './fsrs';
+import { fromCard, isFinitePayload, newCardFields, preview, previewLabel, rate, requeuesInSession, retrievability, toCard } from './fsrs';
 import type { Word } from './types';
 
 const now = new Date(2026, 8, 18, 10, 0, 0).getTime();
@@ -66,32 +66,49 @@ describe('fsrs wrapper', () => {
     expect(word.due - now).toBeGreaterThanOrEqual(DAY - MIN);
   });
 
-  it('preview returns 4 labels: ↻ for same-session re-queue, N日後 otherwise', () => {
+  it('preview returns 4 labels: ↻ for Again re-queue, 今日 for Hard / Good short-term steps, N日後 otherwise', () => {
     const p = preview(makeWord(), now);
     expect(Object.keys(p)).toHaveLength(4);
-    // New: Again / Hard / Good は 10 分ステップ（Learning）、Easy は Review
+    // New: Again / Hard / Good は 10 分ステップ（Learning）、Easy は Review。再出題は Again だけ
     expect(p[1]).toMatchObject({ requeue: true, label: '↻' });
-    expect(p[2]).toMatchObject({ requeue: true, label: '↻' });
-    expect(p[3]).toMatchObject({ requeue: true, label: '↻' });
+    expect(p[2]).toMatchObject({ requeue: false, label: '今日' });
+    expect(p[3]).toMatchObject({ requeue: false, label: '今日' });
     expect(p[4].requeue).toBe(false);
     expect(p[4].label).toMatch(/^\d+日後$/);
     for (const g of [1, 2, 3, 4] as const) expect(p[g].due).toBeGreaterThan(now);
-    // Learning（2 段目）: Good / Easy は Review、Again / Hard は再出題
+    // Learning（2 段目）: Good / Easy は Review、Again は再出題、Hard は Learning のまま（今日）
     const learning = rate(makeWord(), 3, now).word;
     const q = preview(learning, now + 10 * MIN);
-    expect(q[1].label).toBe('↻');
-    expect(q[2].label).toBe('↻');
+    expect(q[1]).toMatchObject({ requeue: true, label: '↻' });
+    expect(q[2]).toMatchObject({ requeue: false, label: '今日' });
     expect(q[3].label).toMatch(/^\d+日後$/);
     expect(q[4].label).toMatch(/^\d+日後$/);
     // Review: Again だけ再出題（Relearning）
     const review = rate(learning, 3, now + 10 * MIN).word;
     const r = preview(review, review.due + DAY);
-    expect(r[1].label).toBe('↻');
+    expect(r[1]).toMatchObject({ requeue: true, label: '↻' });
     expect(r[2].label).toMatch(/^\d+日後$/);
     expect(r[3].label).toMatch(/^\d+日後$/);
     expect(r[4].label).toMatch(/^\d+日後$/);
-    expect(previewLabel(2, 3)).toBe('3日後');
-    expect(previewLabel(1, 0)).toBe('↻');
+    // Relearning: Again は再出題、Hard は Relearning のまま（今日）
+    const relearning = rate(review, 1, review.due + DAY).word;
+    const rl = preview(relearning, relearning.due);
+    expect(rl[1]).toMatchObject({ requeue: true, label: '↻' });
+    expect(rl[2]).toMatchObject({ requeue: false, label: '今日' });
+    expect(previewLabel(3, 2, 3)).toBe('3日後');
+    expect(previewLabel(1, 1, 0)).toBe('↻');
+    expect(previewLabel(2, 1, 0)).toBe('今日');
+    expect(previewLabel(3, 3, 0)).toBe('今日');
+  });
+
+  it('requeuesInSession: only Again into Learning / Relearning re-queues (6-3)', () => {
+    expect(requeuesInSession(1, 1)).toBe(true);
+    expect(requeuesInSession(1, 3)).toBe(true);
+    for (const g of [2, 3, 4] as const) {
+      expect(requeuesInSession(g, 1)).toBe(false);
+      expect(requeuesInSession(g, 3)).toBe(false);
+    }
+    expect(requeuesInSession(1, 2)).toBe(false);
   });
 
   it('toCard / fromCard round trip', () => {

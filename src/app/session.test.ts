@@ -67,6 +67,18 @@ describe('session state', () => {
     expect(isFinished(s)).toBe(false);
   });
 
+  it('does not re-queue Hard / Good / Easy even when the card stays in a short-term step', () => {
+    let s = createSession(ctx, 'flashcard', ['a', 'b', 'c'], now);
+    s = applyRating(s, mk('a'), 2, mk('a', { state: 1, due: now + 600000 }), logId(), now);
+    s = applyRating(s, mk('b'), 3, mk('b', { state: 1, due: now + 600000 }), logId(), now);
+    s = applyRating(s, mk('c', { state: 3 }), 2, mk('c', { state: 3, due: now + 900000 }), logId(), now);
+    expect(s.queue).toEqual(['a', 'b', 'c']);
+    expect(s.undo.map((e) => e.requeued)).toEqual([false, false, false]);
+    expect(isFinished(s)).toBe(true);
+    // 評価後の due（今日中）は結果の「次回最も早い復習日」に使われる
+    expect(s.lastDue).toEqual({ a: now + 600000, b: now + 600000, c: now + 900000 });
+  });
+
   it('endEarly marks the session and keeps saved ratings', () => {
     let s = createSession(ctx, 'enToJa', ['a', 'b', 'c'], now);
     s = applyRating(s, mk('a'), 4, mk('a', { state: 2, due: now + 3 * 86400000 }), logId(), now);
@@ -150,7 +162,7 @@ describe('undo (6-3)', () => {
   it('can go back to the start of the session, and no further', () => {
     const start = createSession(ctx, 'enToJa', ['a', 'b', 'c'], now);
     let s = applyRating(start, mk('a'), 3, mk('a', { state: 2, due: now + 86400000 }), logId(), now);
-    s = applyRating(s, mk('b'), 2, mk('b', { state: 1, due: now + 600000 }), logId(), now);
+    s = applyRating(s, mk('b'), 1, mk('b', { state: 1, due: now + 600000 }), logId(), now);
     s = applyRating(s, mk('c'), 4, mk('c', { state: 2, due: now + 4 * 86400000 }), logId(), now);
     expect(s.queue).toEqual(['a', 'b', 'c', 'b']);
     expect(s.index).toBe(3);
@@ -211,7 +223,9 @@ describe('undoAndSave', () => {
     const r2 = await rateAndSave(b, 3, now + 1000);
     if (!r2.ok) throw new Error('save failed');
     s = applyRating(s, b, 3, r2.word, r2.log.id, now + 1000);
-    expect(s.queue).toEqual([a.id, b.id, a.id, b.id]);
+    // b は Good で Learning（10 分後）になるが、再出題は Again だけなので末尾には足さない
+    expect(r2.word.state).toBe(1);
+    expect(s.queue).toEqual([a.id, b.id, a.id]);
     expect((await listReviewLogsForWord(b.id)).length).toBe(1);
 
     // b の評価を取り消す: 履歴が消え、FSRS 項目が New に戻る

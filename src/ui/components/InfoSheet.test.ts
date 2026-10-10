@@ -8,9 +8,9 @@ describe('InfoSheet の文面', () => {
     expect(INFO_STATES.map((s) => s.state)).toEqual([0, 1, 2, 3]);
     expect(INFO_STATES.map((s) => `${STATE_ICONS[s.state]} ${STATE_NAMES[s.state]}: ${s.text}`)).toEqual([
       '⬜ New: まだ一度も学習していないカード。',
-      '🟡 Learning: 初めて評価したあと、このセッション内で再出題を待っているカード。再出題で Hard 以上なら Review に進む。',
+      '🟡 Learning: 初めて評価したあと、今日のうちにもう一度出るのを待っているカード。Again ならこのセッション内で、Hard / Good なら今日の復習でもう一度出る。',
       '🟢 Review: 復習段階に入ったカード。FSRS が決めた間隔で復習する。',
-      '🔴 Relearning: 復習で Again を押したカード。再出題で Hard 以上なら Review に戻る。',
+      '🔴 Relearning: 復習で Again を押したカード。このセッション内でもう一度出て、Good 以上なら Review に戻る。',
     ]);
   });
 
@@ -27,7 +27,7 @@ describe('InfoSheet の文面', () => {
   it('補足は 2 行', () => {
     expect(INFO_NOTES).toEqual([
       '一覧のアイコンは状態を表す。状態は評価の結果として自動で変わる。',
-      'ボタンの下の「N日後」は、その評価を押した場合の次回。↻ はこのセッション内でもう一度出ること。',
+      'ボタンの下の「N日後」は、その評価を押した場合の次回。↻ はこのセッション内でもう一度出ること。「今日」はこのセッションでは出ず、今日の復習にもう一度加わること。',
     ]);
   });
 });

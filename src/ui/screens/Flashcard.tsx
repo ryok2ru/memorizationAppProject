@@ -293,10 +293,9 @@ export function Flashcard() {
                 </>
               ) : (
                 <>
-                  {/* 表をカードの上下中央に置き、画像はその上。画像が高くて上側に収まらないときは表が下がる */}
-                  <div className="card-upper">{image && imageVisible(image.side, { front: true, back: false }) && cardImage}</div>
+                  {/* 裏面と同じく、画像と表をまとめてカードの上下中央に置く */}
+                  {image && imageVisible(image.side, { front: true, back: false }) && cardImage}
                   <div className="study-term">{word.englishTerm}</div>
-                  <div className="card-lower" />
                 </>
               )}
             </div>

@@ -6,9 +6,9 @@ import { STATE_ICONS, STATE_NAMES, type CardState, type Grade } from '../../doma
 /** 【状態】の文面（設計書 7-9）。アイコンと名前は STATE_ICONS / STATE_NAMES を使う */
 export const INFO_STATES: { state: CardState; text: string }[] = [
   { state: 0, text: 'まだ一度も学習していないカード。' },
-  { state: 1, text: '初めて評価したあと、このセッション内で再出題を待っているカード。再出題で Hard 以上なら Review に進む。' },
+  { state: 1, text: '初めて評価したあと、今日のうちにもう一度出るのを待っているカード。Again ならこのセッション内で、Hard / Good なら今日の復習でもう一度出る。' },
   { state: 2, text: '復習段階に入ったカード。FSRS が決めた間隔で復習する。' },
-  { state: 3, text: '復習で Again を押したカード。再出題で Hard 以上なら Review に戻る。' },
+  { state: 3, text: '復習で Again を押したカード。このセッション内でもう一度出て、Good 以上なら Review に戻る。' },
 ];
 
 /** 【評価】の文面（設計書 7-9）。並びは Again → Hard → Good → Easy */
@@ -22,7 +22,7 @@ export const INFO_GRADES: { grade: Grade; name: string; text: string }[] = [
 /** 【補足】の文面（設計書 7-9） */
 export const INFO_NOTES: string[] = [
   '一覧のアイコンは状態を表す。状態は評価の結果として自動で変わる。',
-  'ボタンの下の「N日後」は、その評価を押した場合の次回。↻ はこのセッション内でもう一度出ること。',
+  'ボタンの下の「N日後」は、その評価を押した場合の次回。↻ はこのセッション内でもう一度出ること。「今日」はこのセッションでは出ず、今日の復習にもう一度加わること。',
 ];
 
 /**

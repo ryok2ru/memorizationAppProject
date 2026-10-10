@@ -1368,21 +1368,13 @@ dialog.sheet.sheet-slide::backdrop {
   margin-bottom: 8px;
 }
 
-/* フラッシュカード: 画像と文字の間は gap 8px + 8px = 16px（6-4） */
+/* フラッシュカード: 画像と文字の間は、裏面が gap 8px + 8px = 16px、表面が gap 8px + 16px = 24px（6-4） */
 .study-card .card-image {
   margin-bottom: 8px;
 }
 
-/* フラッシュカードの表面（6-4）: 上下を同じ割合で伸ばして表をカードの上下中央に置き、画像は上側の下端に寄せる。
-   画像が高くて上側に収まらないときは、上側が画像の高さより縮まないので下側だけが縮み、表が下がる */
-.card-upper,
-.card-lower {
-  flex: 1 1 0;
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-end;
+.study-card[data-flipped='false'] .card-image {
+  margin-bottom: 16px;
 }
 
 /* 単語フォームの画像欄（7-4） */
