@@ -6,6 +6,7 @@ import { FavoriteButton } from '../components/FavoriteButton';
 import { useStudy } from '../useStudy';
 import { useWordImage } from '../hooks';
 import { imageVisible } from '../../app/image';
+import { ALL_RATE_METHODS } from '../../app/session';
 import { preview } from '../../domain/fsrs';
 import { GRADES, GRADE_NAMES, type Grade } from '../../domain/types';
 
@@ -72,6 +73,16 @@ export function confirmDistance(cardWidth: number): number {
   return cardWidth > 0 ? cardWidth * CONFIRM_RATIO : FALLBACK_CONFIRM_PX;
 }
 
+/** カード直下の表面の案内文（6-4）。スワイプ OFF（7-5）ではスワイプに触れない */
+export const frontHint = (swipeOn: boolean): string =>
+  swipeOn ? 'タップで答えを表示。スワイプで評価' : 'タップで答えを表示';
+
+/** カードの読み上げ用の名前 */
+export function cardAriaLabel(flipped: boolean, swipeOn: boolean): string {
+  const base = flipped ? '裏面。タップで表面に戻す' : '表面。タップで答えを表示';
+  return swipeOn ? `${base}。スワイプで評価` : base;
+}
+
 export function Flashcard() {
   const {
     session, word, message, busy, rate, undo, canUndo, favorite, toggleFavorite,
@@ -86,6 +97,8 @@ export function Flashcard() {
   const gesture = useRef<{ id: number; x: number; y: number; axis: Axis | null } | null>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const image = useWordImage(word?.id);
+  /** 評価方法（7-5）。スワイプ OFF ならカードはタップで裏返るだけ、ボタン OFF なら評価ボタンを出さない */
+  const { swipe: swipeOn, buttons: buttonsOn } = session?.rateMethods ?? ALL_RATE_METHODS;
 
   // 出題位置が変わったら表面に戻す。取り消しで戻った位置は裏面（評価ボタン有効）で出す
   useEffect(() => {
@@ -146,6 +159,8 @@ export function Flashcard() {
       if (Math.abs(dx) < DECIDE_PX && Math.abs(dy) < DECIDE_PX) return;
       g.axis = Math.abs(dx) >= Math.abs(dy) ? 'x' : 'y';
     }
+    // スワイプ OFF: 10px 以上動いたらタップとしては扱わず、カードも動かさない
+    if (!swipeOn) return;
     setDrag({ axis: g.axis, d: g.axis === 'x' ? dx : dy });
   };
   const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -158,6 +173,7 @@ export function Flashcard() {
       setFlipped((f) => !f);
       return;
     }
+    if (!swipeOn) return;
     const d = g.axis === 'x' ? e.clientX - g.x : e.clientY - g.y;
     if (Math.abs(d) >= confirmPx) {
       setDrag({ axis: g.axis, d });
@@ -252,22 +268,24 @@ export function Flashcard() {
           </div>
           <div className="card-frame">
             {/* 四辺の目印。カードの外にあるので追従せず、pointer-events: none で判定にも関わらない */}
-            {SWIPE_GUIDES.map((g) => (
-              <span
-                key={g.grade}
-                className={`swipe-guide ${g.side} text-grade-${g.grade}${dragGrade === g.grade ? ' active' : ''}`}
-                aria-hidden="true"
-                data-testid={`guide-${g.grade}`}
-              >
-                {g.text}
-              </span>
-            ))}
+            {/* スワイプ OFF（7-5）では出さない */}
+            {swipeOn &&
+              SWIPE_GUIDES.map((g) => (
+                <span
+                  key={g.grade}
+                  className={`swipe-guide ${g.side} text-grade-${g.grade}${dragGrade === g.grade ? ' active' : ''}`}
+                  aria-hidden="true"
+                  data-testid={`guide-${g.grade}`}
+                >
+                  {g.text}
+                </span>
+              ))}
             <div
               ref={cardRef}
               className={cardClass}
               role="button"
               tabIndex={0}
-              aria-label={flipped ? '裏面。タップで表面に戻す。スワイプで評価' : '表面。タップで答えを表示。スワイプで評価'}
+              aria-label={cardAriaLabel(flipped, swipeOn)}
               data-testid="study-card"
               data-flipped={flipped}
               data-swipe-grade={dragGrade ?? undefined}
@@ -304,36 +322,39 @@ export function Flashcard() {
           <div className="card-status" data-testid="card-status">
             {side === 'bottom' ? swipeLabel : side === 'top' || flipped ? null : (
               <span className="study-hint" data-testid="front-hint">
-                タップで答えを表示。スワイプで評価
+                {frontHint(swipeOn)}
               </span>
             )}
           </div>
         </div>
       )}
 
-      {/* 評価ボタンは裏面だけに表示する。表面では場所だけ確保して表示しない（カードの大きさを変えないため） */}
-      <div className={`grade-area${flipped ? '' : ' hidden'}`} aria-hidden={!flipped}>
-        <div className="grade-buttons">
-          {GRADES.map((g) => (
-            <button
-              key={g}
-              type="button"
-              className={`grade-btn grade-${g}`}
-              disabled={!flipped || busy || !word || anim === 'leave'}
-              onClick={() => void rate(g)}
-              data-testid={`grade-${g}`}
-            >
-              {GRADE_NAMES[g]}
-              <small data-testid={`preview-${g}`}>{labels ? labels[g].label : ''}</small>
-            </button>
-          ))}
+      {/* 評価ボタンは裏面だけに表示する。表面では場所だけ確保して表示しない（カードの大きさを変えないため）。
+          ボタン OFF（7-5）では出さず、その分カードを縦に広げる */}
+      {buttonsOn && (
+        <div className={`grade-area${flipped ? '' : ' hidden'}`} aria-hidden={!flipped}>
+          <div className="grade-buttons">
+            {GRADES.map((g) => (
+              <button
+                key={g}
+                type="button"
+                className={`grade-btn grade-${g}`}
+                disabled={!flipped || busy || !word || anim === 'leave'}
+                onClick={() => void rate(g)}
+                data-testid={`grade-${g}`}
+              >
+                {GRADE_NAMES[g]}
+                <small data-testid={`preview-${g}`}>{labels ? labels[g].label : ''}</small>
+              </button>
+            ))}
+          </div>
+          {anyRequeue && (
+            <p className="requeue-hint" data-testid="requeue-hint">
+              ↻ このセッションでもう一度出ます
+            </p>
+          )}
         </div>
-        {anyRequeue && (
-          <p className="requeue-hint" data-testid="requeue-hint">
-            ↻ このセッションでもう一度出ます
-          </p>
-        )}
-      </div>
+      )}
 
       <QuitSheet
         open={confirmQuit}

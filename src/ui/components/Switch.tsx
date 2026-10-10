@@ -2,9 +2,10 @@ interface Props {
   checked: boolean;
   onChange: (next: boolean) => void;
   label: string;
+  disabled?: boolean;
 }
 
-export function Switch({ checked, onChange, label }: Props) {
+export function Switch({ checked, onChange, label, disabled }: Props) {
   return (
     <button
       type="button"
@@ -12,6 +13,7 @@ export function Switch({ checked, onChange, label }: Props) {
       aria-checked={checked}
       aria-label={label}
       className="switch"
+      disabled={disabled}
       onClick={() => onChange(!checked)}
     />
   );

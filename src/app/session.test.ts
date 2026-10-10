@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
+  ALL_RATE_METHODS,
   applyRating,
+  canTurnOff,
   canUndo,
   completed,
   createSession,
@@ -9,6 +11,7 @@ import {
   endEarly,
   isFinished,
   needsQuitSheet,
+  rateMethodsFrom,
   ratedEntries,
   rateAndSave,
   remaining,
@@ -368,5 +371,28 @@ describe('ending with no rating (6-3 の ✕)', () => {
     expect(needsQuitSheet(s)).toBe(false);
     expect(summarize(s, now).rated).toBe(0);
     expect(ratedEntries(s)).toEqual([]);
+  });
+});
+
+describe('rating methods of the flashcard (7-5)', () => {
+  it('keeps the chosen methods in the session, both on by default', () => {
+    expect(createSession(ctx, 'flashcard', ['a'], now).rateMethods).toEqual({ swipe: true, buttons: true });
+    const s = createSession(ctx, 'flashcard', ['a'], now, { swipe: false, buttons: true });
+    expect(s.rateMethods).toEqual({ swipe: false, buttons: true });
+  });
+
+  it('reads the methods from the settings, and turns both on when both are off', () => {
+    expect(rateMethodsFrom({ flashcardSwipe: true, flashcardButtons: false })).toEqual({ swipe: true, buttons: false });
+    expect(rateMethodsFrom({ flashcardSwipe: false, flashcardButtons: true })).toEqual({ swipe: false, buttons: true });
+    expect(rateMethodsFrom({ flashcardSwipe: false, flashcardButtons: false })).toEqual(ALL_RATE_METHODS);
+  });
+
+  it('does not let the only method that is on be turned off', () => {
+    expect(canTurnOff({ swipe: true, buttons: true }, 'swipe')).toBe(true);
+    expect(canTurnOff({ swipe: true, buttons: true }, 'buttons')).toBe(true);
+    expect(canTurnOff({ swipe: true, buttons: false }, 'swipe')).toBe(false);
+    expect(canTurnOff({ swipe: false, buttons: true }, 'buttons')).toBe(false);
+    // OFF のものは（ON にするだけなので）いつでも操作できる
+    expect(canTurnOff({ swipe: true, buttons: false }, 'buttons')).toBe(true);
   });
 });

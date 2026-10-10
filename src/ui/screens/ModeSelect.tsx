@@ -5,9 +5,17 @@ import { Switch } from '../components/Switch';
 import { useAsync } from '../hooks';
 import { listFolders } from '../../db/repo';
 import { loadOverview, estimateMinutes } from '../../app/stats';
-import { loadSettings } from '../../app/settings';
+import { loadSettings, updateSettings } from '../../app/settings';
 import { buildQueue } from '../../app/queue';
-import { createSession, setSession, type StudyMode } from '../../app/session';
+import {
+  ALL_RATE_METHODS,
+  canTurnOff,
+  createSession,
+  rateMethodsFrom,
+  setSession,
+  type RateMethods,
+  type StudyMode,
+} from '../../app/session';
 import { isFavoritesScope, scopeFolderId } from '../../domain/types';
 import { labelsForScope } from '../../domain/labels';
 
@@ -24,11 +32,22 @@ export function ModeSelect() {
     return { overview, settings, folders };
   }, [scope]);
   const [shuffleOn, setShuffleOn] = useState(false);
+  const [methods, setMethods] = useState<RateMethods>(ALL_RATE_METHODS);
   const [starting, setStarting] = useState(false);
 
   useEffect(() => {
-    if (data) setShuffleOn(data.settings.cardOrder === 'random');
+    if (!data) return;
+    setShuffleOn(data.settings.cardOrder === 'random');
+    setMethods(rateMethodsFrom(data.settings));
   }, [data]);
+
+  /** 評価方法はシャッフルと違い、変えたらその場で設定に保存し、次回も同じ状態で始める（7-5） */
+  const setMethod = (key: keyof RateMethods, on: boolean) => {
+    if (!on && !canTurnOff(methods, key)) return;
+    const next = { ...methods, [key]: on };
+    setMethods(next);
+    void updateSettings({ flashcardSwipe: next.swipe, flashcardButtons: next.buttons }).catch((e) => console.error(e));
+  };
 
   if (!data) return <div className="screen"><Header title="" back={backTo} /></div>;
 
@@ -61,7 +80,7 @@ export function ModeSelect() {
         setStarting(false);
         return;
       }
-      setSession(createSession({ scope, kind: q.kind }, mode, q.ids));
+      setSession(createSession({ scope, kind: q.kind }, mode, q.ids, Date.now(), methods));
       navigate(mode === 'flashcard' ? '/study/flashcard' : '/study/typing', { replace: true });
     } catch (e) {
       console.error(e);
@@ -86,17 +105,45 @@ export function ModeSelect() {
 
       {empty && <div className="notice center muted">学習できるカードがありません</div>}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <button type="button" className="btn-primary" disabled={empty || starting} onClick={() => void start('flashcard')}>
-          フラッシュカード
-        </button>
-        <button type="button" className="btn-primary" disabled={empty || starting} onClick={() => void start('enToJa')}>
-          {labels.front}→{labels.back} 入力
-        </button>
-        <button type="button" className="btn-primary" disabled={empty || starting} onClick={() => void start('jaToEn')}>
-          {labels.back}→{labels.front} 入力
-        </button>
-      </div>
+      {/* フラッシュカードとタイプ入力を分け、評価方法はフラッシュカードの枠に、シャッフルは両方に効くので枠の外に置く */}
+      <section className="section">
+        <h2>フラッシュカード</h2>
+        <div className="card">
+          <button type="button" className="btn-primary" disabled={empty || starting} onClick={() => void start('flashcard')}>
+            フラッシュカード
+          </button>
+          <div className="setting-row">
+            <span>スワイプで評価</span>
+            <Switch
+              checked={methods.swipe}
+              onChange={(v) => setMethod('swipe', v)}
+              label="スワイプで評価"
+              disabled={!canTurnOff(methods, 'swipe')}
+            />
+          </div>
+          <div className="setting-row">
+            <span>ボタンで評価</span>
+            <Switch
+              checked={methods.buttons}
+              onChange={(v) => setMethod('buttons', v)}
+              label="ボタンで評価"
+              disabled={!canTurnOff(methods, 'buttons')}
+            />
+          </div>
+        </div>
+      </section>
+
+      <section className="section">
+        <h2>入力</h2>
+        <div className="card">
+          <button type="button" className="btn-primary" disabled={empty || starting} onClick={() => void start('enToJa')}>
+            {labels.front}→{labels.back} 入力
+          </button>
+          <button type="button" className="btn-primary" disabled={empty || starting} onClick={() => void start('jaToEn')}>
+            {labels.back}→{labels.front} 入力
+          </button>
+        </div>
+      </section>
 
       <div className="setting-row card">
         <span>シャッフル</span>
