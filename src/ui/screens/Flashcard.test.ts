@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { CONFIRM_RATIO, FALLBACK_CONFIRM_PX, SWIPE_GUIDES, confirmDistance, labelSide, swipeGrade, swipeVisual } from './Flashcard';
+import {
+  CONFIRM_RATIO,
+  FALLBACK_CONFIRM_PX,
+  SWIPE_GUIDES,
+  cardAriaLabel,
+  confirmDistance,
+  frontHint,
+  labelSide,
+  swipeGrade,
+  swipeVisual,
+} from './Flashcard';
 
 describe('swipeGrade', () => {
   it('maps down = Again, left = Hard, right = Good, up = Easy', () => {
@@ -57,5 +67,16 @@ describe('confirmDistance (6-4)', () => {
   it('falls back to 85px when the card has not been measured yet', () => {
     expect(confirmDistance(0)).toBe(FALLBACK_CONFIRM_PX);
     expect(FALLBACK_CONFIRM_PX).toBe(85);
+  });
+});
+
+describe('front hint and card label (6-4, 7-5)', () => {
+  it('mentions the swipe only when rating by swipe is on', () => {
+    expect(frontHint(true)).toBe('タップで答えを表示。スワイプで評価');
+    expect(frontHint(false)).toBe('タップで答えを表示');
+    expect(cardAriaLabel(false, true)).toBe('表面。タップで答えを表示。スワイプで評価');
+    expect(cardAriaLabel(true, true)).toBe('裏面。タップで表面に戻す。スワイプで評価');
+    expect(cardAriaLabel(false, false)).toBe('表面。タップで答えを表示');
+    expect(cardAriaLabel(true, false)).toBe('裏面。タップで表面に戻す');
   });
 });

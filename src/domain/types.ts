@@ -102,6 +102,8 @@ export interface Settings {
   importHasHeader: boolean; // 最後に使った「1行目は見出し」
   importColumns: ImportColumnRole[]; // 最後に使った列の割り当て（左から）
   calendarStartDate: number | null; // カレンダーの表示開始日時（7-11）。null なら全期間
+  flashcardSwipe: boolean; // フラッシュカードをスワイプで評価するか（7-5 で最後に選んだもの）
+  flashcardButtons: boolean; // フラッシュカードを下の評価ボタンで評価するか（同上）
   schemaVersion: 2;
 }
 
@@ -118,6 +120,8 @@ export const DEFAULT_SETTINGS: Settings = {
   importHasHeader: false,
   importColumns: ['en', 'ja', 'memo'],
   calendarStartDate: null,
+  flashcardSwipe: true,
+  flashcardButtons: true,
   schemaVersion: 2,
 };
 

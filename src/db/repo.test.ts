@@ -279,6 +279,16 @@ describe('settings and snapshot', () => {
     expect(s.id).toBe('app');
   });
 
+  it('defaults both flashcard rating methods to on and keeps the last choice (4-5)', async () => {
+    const d = await getSettings();
+    expect(d.flashcardSwipe).toBe(true);
+    expect(d.flashcardButtons).toBe(true);
+    await saveSettings({ flashcardSwipe: false });
+    const s = await getSettings();
+    expect(s.flashcardSwipe).toBe(false);
+    expect(s.flashcardButtons).toBe(true);
+  });
+
   it('replaceAll replaces everything', async () => {
     const f = await createFolder('A', now);
     await createWord({ folderId: f.id, englishTerm: 'a', japaneseDefinition: 'あ', memo: '' }, now);

@@ -1,9 +1,27 @@
-import type { Grade, Word, ReviewLog, FsrsFields, Scope } from '../domain/types';
+import type { Grade, Word, ReviewLog, FsrsFields, Scope, Settings } from '../domain/types';
 import { rate as fsrsRate, isFinitePayload, requeuesInSession, FSRS_KEYS } from '../domain/fsrs';
 import { saveRating, revertRating, revertRatings } from '../db/repo';
 import type { SessionKind } from './queue';
 
 export type StudyMode = 'flashcard' | 'enToJa' | 'jaToEn';
+
+/** フラッシュカードの評価方法（7-5）。スワイプと下の評価ボタンを別々に ON / OFF する。少なくとも一方は ON */
+export interface RateMethods {
+  swipe: boolean;
+  buttons: boolean;
+}
+
+export const ALL_RATE_METHODS: RateMethods = { swipe: true, buttons: true };
+
+/** 設定に保存した評価方法を読む。両方 OFF（壊れたバックアップなど）では評価できないので両方 ON に戻す */
+export function rateMethodsFrom(s: Pick<Settings, 'flashcardSwipe' | 'flashcardButtons'>): RateMethods {
+  const m = { swipe: s.flashcardSwipe === true, buttons: s.flashcardButtons === true };
+  return m.swipe || m.buttons ? m : ALL_RATE_METHODS;
+}
+
+/** その評価方法を OFF にできるか。ON が 1 つだけのときは、それを OFF にできない（7-5） */
+export const canTurnOff = (m: RateMethods, key: keyof RateMethods): boolean =>
+  !m[key] || m[key === 'swipe' ? 'buttons' : 'swipe'];
 
 /** 6-1 の 6 種を scope × kind で表す。scope は 'all'、'favorites'、またはフォルダ id */
 export interface SessionContext {
@@ -46,10 +64,18 @@ export interface SessionState {
   lastDue: Record<string, number>;
   /** 取り消しスタック。ページ再読み込みで消える */
   undo: UndoEntry[];
+  /** フラッシュカードの評価方法（7-5）。タイプ入力では使わない */
+  rateMethods: RateMethods;
 }
 
-export function createSession(context: SessionContext, mode: StudyMode, queue: string[], now = Date.now()): SessionState {
-  return { context, mode, queue: queue.slice(), index: 0, items: {}, startedAt: now, endedEarly: false, lastDue: {}, undo: [] };
+export function createSession(
+  context: SessionContext,
+  mode: StudyMode,
+  queue: string[],
+  now = Date.now(),
+  rateMethods: RateMethods = ALL_RATE_METHODS,
+): SessionState {
+  return { context, mode, queue: queue.slice(), index: 0, items: {}, startedAt: now, endedEarly: false, lastDue: {}, undo: [], rateMethods };
 }
 
 export const currentWordId = (s: SessionState): string | undefined => s.queue[s.index];
