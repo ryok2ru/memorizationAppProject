@@ -2188,18 +2188,11 @@ dialog.add-relation-dialog[open] {
 
 /* 階層モード（アウトライン） */
 .outline {
+  /* 木の線の 1 段の幅。開閉ボタンの ▾ の中心がこの半分の位置に来るように合わせる */
+  --outline-indent: 24px;
   display: flex;
   flex-direction: column;
   gap: 16px;
-}
-
-.outline-paths {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
 }
 
 .outline-row {
@@ -2208,39 +2201,68 @@ dialog.add-relation-dialog[open] {
   min-height: 44px;
 }
 
-.outline-tree {
+/* 木の線（1 段ぶん）。行の高さいっぱいに伸ばし、行の間でも途切れずにつながる */
+.outline-guide {
   flex: none;
-  color: var(--muted);
-  font-family: ui-monospace, Menlo, monospace;
-  white-space: pre;
+  align-self: stretch;
+  position: relative;
+  width: var(--outline-indent);
 }
 
-/* 開閉ボタン。枠は付けず、押せる範囲だけ広く取る。▸▾ は 28px、子の数は 8px */
+.outline-guide.is-line::before,
+.outline-guide.is-branch::before,
+.outline-guide.is-last::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(50% - 0.75px);
+  width: 1.5px;
+  background: var(--muted);
+}
+
+.outline-guide.is-last::before {
+  bottom: 50%;
+}
+
+.outline-guide.is-branch::after,
+.outline-guide.is-last::after {
+  content: '';
+  position: absolute;
+  top: calc(50% - 0.75px);
+  left: calc(50% - 0.75px);
+  right: 0;
+  height: 1.5px;
+  background: var(--muted);
+}
+
+/*
+ * 開閉ボタン。枠は付けず、押せる範囲だけ広く取る。▸▾ は 28px、子の数は 8px。
+ * 左へ 1 段の半分ずらし、▸▾ を左端から 1 段の半分〜1 段半の枠の中央に置く。
+ * こうすると ▾ の中心が、開いた子の段の縦線と同じ位置に来る（子の数の桁が増えても動かない）
+ */
 .outline-toggle {
   flex: none;
   display: inline-flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 4px;
   height: 36px;
   min-height: 36px;
   min-width: 48px;
+  margin-left: calc(var(--outline-indent) / -2);
   margin-right: 6px;
-  padding: 0 8px;
+  padding: 0 8px 0 calc(var(--outline-indent) / 2);
   color: var(--accent);
   font-size: 8px;
   font-weight: 600;
 }
 
 .outline-toggle-icon {
+  flex: none;
+  width: var(--outline-indent);
+  text-align: center;
   font-size: 28px;
-  line-height: 1;
-}
-
-/* 上位への経路の区切り「›」。細くて見にくいので、本文の 1.5 倍の太字にする */
-.outline-sep {
-  font-size: 1.5em;
-  font-weight: 700;
   line-height: 1;
 }
 

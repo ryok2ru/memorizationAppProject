@@ -218,6 +218,33 @@ export function ancestorPaths(
   return { paths, total: count(center) };
 }
 
+/** 上位の木の 1 項目。children はその項目の上位 */
+export interface AncestorNode {
+  id: string;
+  children: AncestorNode[];
+}
+
+/**
+ * 上位の木（7-13）。ancestorPaths の経路（最上位から中心）を中心の側からたどり、
+ * 共通の部分をまとめる。返すのは中心のすぐ上の上位の並び。経路は名前順なので、入れた順がそのまま名前順になる
+ */
+export function ancestorTree(paths: readonly string[][]): AncestorNode[] {
+  const roots: AncestorNode[] = [];
+  for (const path of paths) {
+    let level = roots;
+    // 末尾は中心なので除き、中心に近い側から並べる
+    for (let i = path.length - 2; i >= 0; i--) {
+      let node = level.find((n) => n.id === path[i]);
+      if (!node) {
+        node = { id: path[i], children: [] };
+        level.push(node);
+      }
+      level = node.children;
+    }
+  }
+  return roots;
+}
+
 /** 下位の一覧（7-13 の木の 1 段）。名前の文字順 */
 export function outlineChildren(children: Map<string, string[]>, id: string, nameOf: (id: string) => string): string[] {
   return [...(children.get(id) ?? [])].sort((a, b) => nameOf(a).localeCompare(nameOf(b), 'ja'));
@@ -229,12 +256,15 @@ export function limitLevel<T>(list: readonly T[], showAll: boolean, max: number 
   return { shown: list.slice(0, max), rest: list.length - max };
 }
 
+/** 木の線の 1 段ぶん。line = │、blank = 空白、branch = ├、last = └ */
+export type TreeGuide = 'line' | 'blank' | 'branch' | 'last';
+
 /**
  * 木の線（7-13）。ancestorsLast は根に近い段から順に「その段で最後の行か」。
  * 最後でない段は「│」、最後の段は空白で続け、自分の段は最後なら「└」、それ以外は「├」
  */
-export function treePrefix(ancestorsLast: readonly boolean[], isLast: boolean): string {
-  return ancestorsLast.map((last) => (last ? '　' : '│')).join('') + (isLast ? '└' : '├');
+export function treeGuides(ancestorsLast: readonly boolean[], isLast: boolean): TreeGuide[] {
+  return [...ancestorsLast.map((last): TreeGuide => (last ? 'blank' : 'line')), isLast ? 'last' : 'branch'];
 }
 
 export { childrenMap };
