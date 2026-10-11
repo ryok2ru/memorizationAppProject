@@ -3,6 +3,7 @@ import type { Edge } from '../domain/types';
 import {
   ancestorPaths,
   childrenMap,
+  LINK_GAP,
   layoutRelationGraph,
   limitLevel,
   outlineChildren,
@@ -20,7 +21,7 @@ const overlaps = (a: GraphBox, b: GraphBox) => a.x < b.x + b.w && b.x < a.x + a.
 
 function allBoxes(input: GraphInput, width: number): GraphBox[] {
   const l = layoutRelationGraph(input, width);
-  return [...l.items, ...l.more, ...l.plus];
+  return [...l.items, ...l.more];
 }
 
 describe('関係モードの配置（7-13）', () => {
@@ -56,8 +57,13 @@ describe('関係モードの配置（7-13）', () => {
     }
   });
 
-  it('「＋」は上位・下位・連結の 3 つ', () => {
-    expect(layoutRelationGraph(full, 390).plus.map((p) => p.section).sort()).toEqual(['children', 'links', 'parents']);
+  it.each([288, 320, 358, 390, 448, 480])('幅 %ipx で連結の列と中心の間を LINK_GAP 以上空ける', (width) => {
+    const l = layoutRelationGraph(full, width);
+    const center = l.items.find((p) => p.side === 'center')!;
+    for (const p of [...l.items, ...l.more]) {
+      if (p.side === 'left') expect(center.x - (p.x + p.w)).toBeGreaterThanOrEqual(LINK_GAP - 1e-9);
+      if (p.side === 'right') expect(p.x - (center.x + center.w)).toBeGreaterThanOrEqual(LINK_GAP - 1e-9);
+    }
   });
 
   it.each([288, 320, 358, 390, 448, 480])('幅 %ipx で枠が重ならず、はみ出さない', (width) => {

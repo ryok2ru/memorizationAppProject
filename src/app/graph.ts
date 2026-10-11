@@ -43,11 +43,6 @@ export interface PlacedMore extends GraphBox {
   count: number;
 }
 
-/** 「＋」（関係の追加）。上位・下位・連結の 3 つ */
-export interface PlacedPlus extends GraphBox {
-  section: 'parents' | 'children' | 'links';
-}
-
 export interface GraphLine {
   /** SVG の path の d */
   d: string;
@@ -61,7 +56,6 @@ export interface GraphLayout {
   height: number;
   items: PlacedItem[];
   more: PlacedMore[];
-  plus: PlacedPlus[];
   lines: GraphLine[];
 }
 
@@ -72,7 +66,8 @@ const PAD = 4;
 const GAP = 8;
 /** 上下の並びと中心の行の間（階層の線を引く所） */
 const ROW_GAP = 28;
-export const PLUS_SIZE = 28;
+/** 左右の連結の列と中心の列の間（連結の曲線を引く所）。狭いと点線がつぶれて見えない */
+export const LINK_GAP = 32;
 
 /** 方向ごとに 3 件まで出し、残りを「+N」にまとめる（7-13） */
 export function splitSide<T>(list: readonly T[], max: number = LIMITS.graphSideMax): { shown: T[]; rest: number } {
@@ -84,32 +79,32 @@ const itemH = (it: GraphItem) => BOX_H + (it.label ? LABEL_H : 0);
 /**
  * 関係モードの配置（7-13）。幅 width（320〜480px を想定）の中に、上に上位、下に下位、
  * 左に方向なしと ←、右に → を並べ、各方向 3 件まで、超えた分は「+N」にまとめる。
- * 上位・下位の並びの右端と、右の並びの下に「＋」を置く。座標は左上原点の px
+ * 左右の列と中心の間は LINK_GAP 空け、連結の曲線を引く。座標は左上原点の px
  */
 export function layoutRelationGraph(input: GraphInput, width: number): GraphLayout {
   const items: PlacedItem[] = [];
   const more: PlacedMore[] = [];
-  const plus: PlacedPlus[] = [];
   const lines: GraphLine[] = [];
-  const colW = (width - PAD * 2 - GAP * 2) / 3;
-  const colX = [PAD, PAD + colW + GAP, PAD + (colW + GAP) * 2];
+  // 中央の行（左の列・中心・右の列）。列の間は連結の曲線のために LINK_GAP 空ける
+  const colW = (width - PAD * 2 - LINK_GAP * 2) / 3;
+  const colX = [PAD, PAD + colW + LINK_GAP, PAD + (colW + LINK_GAP) * 2];
+  // 上下の並びの枠の幅は、連結の間隔に左右されないよう、幅を 3 等分した値を上限にする
+  const rowW = (width - PAD * 2 - GAP * 2) / 3;
 
-  // 上下の横の並び。項目と「+N」を等分した枠に置き、右端に「＋」
+  // 上下の横の並び。項目と「+N」を等分した枠に置き、中央にそろえる
   const row = (side: 'top' | 'bottom', list: GraphItem[], y: number): PlacedItem[] => {
     const { shown, rest } = splitSide(list);
     const slots = shown.length + (rest > 0 ? 1 : 0);
-    const avail = width - PAD * 2 - PLUS_SIZE - GAP;
-    const slotW = slots > 0 ? Math.min(colW, (avail - GAP * (slots - 1)) / slots) : 0;
+    const avail = width - PAD * 2;
+    const slotW = slots > 0 ? Math.min(rowW, (avail - GAP * (slots - 1)) / slots) : 0;
     const total = slots * slotW + Math.max(0, slots - 1) * GAP;
-    // 並びは中心の列の真ん中にそろえ、はみ出すなら左に寄せる
-    let x = Math.max(PAD, Math.min(width / 2 - total / 2, width - PAD - PLUS_SIZE - GAP - total));
+    let x = width / 2 - total / 2;
     const placed: PlacedItem[] = [];
     for (const it of shown) {
       placed.push({ item: it, side, x, y, w: slotW, h: BOX_H });
       x += slotW + GAP;
     }
     if (rest > 0) more.push({ side, count: rest, x, y, w: slotW, h: BOX_H });
-    plus.push({ section: side === 'top' ? 'parents' : 'children', x: width - PAD - PLUS_SIZE, y: y + (BOX_H - PLUS_SIZE) / 2, w: PLUS_SIZE, h: PLUS_SIZE });
     items.push(...placed);
     return placed;
   };
@@ -136,10 +131,7 @@ export function layoutRelationGraph(input: GraphInput, width: number): GraphLayo
   const midTop = topY + BOX_H + ROW_GAP;
   const leftCol = column('left', input.left, colX[0], midTop);
   const rightCol = column('right', input.right, colX[2], midTop);
-  // 右の並びの下に連結の「＋」
-  const linkPlusY = Math.max(midTop, rightCol.bottom + GAP);
-  plus.push({ section: 'links', x: colX[2] + colW / 2 - PLUS_SIZE / 2, y: linkPlusY, w: PLUS_SIZE, h: PLUS_SIZE });
-  const midBottom = Math.max(leftCol.bottom, linkPlusY + PLUS_SIZE, midTop + BOX_H);
+  const midBottom = Math.max(leftCol.bottom, rightCol.bottom, midTop + BOX_H);
   const center: PlacedItem = { item: input.center, side: 'center', x: colX[1], y: (midTop + midBottom) / 2 - BOX_H / 2, w: colW, h: BOX_H };
   items.push(center);
   const bottomY = midBottom + ROW_GAP;
@@ -177,7 +169,7 @@ export function layoutRelationGraph(input: GraphInput, width: number): GraphLayo
   for (const t of leftCol.placed) curve(t, true, t.item.directed === true, true);
   for (const t of rightCol.placed) curve(t, false, t.item.directed === true, false);
 
-  return { width, height, items, more, plus, lines };
+  return { width, height, items, more, lines };
 }
 
 // ---------- 階層モード（アウトライン。7-13） ----------
