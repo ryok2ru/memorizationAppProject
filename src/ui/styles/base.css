@@ -2215,7 +2215,7 @@ dialog.add-relation-dialog[open] {
   white-space: pre;
 }
 
-/* 開閉ボタン。押しやすく見やすいよう、強調色の枠で囲み、▸▾ は 28px にする */
+/* 開閉ボタン。枠は付けず、押せる範囲だけ広く取る。▸▾ は 28px、子の数は 8px */
 .outline-toggle {
   flex: none;
   display: inline-flex;
@@ -2227,15 +2227,20 @@ dialog.add-relation-dialog[open] {
   min-width: 48px;
   margin-right: 6px;
   padding: 0 8px;
-  border: 1px solid var(--accent);
-  border-radius: 8px;
   color: var(--accent);
-  font-size: 16px;
+  font-size: 8px;
   font-weight: 600;
 }
 
 .outline-toggle-icon {
   font-size: 28px;
+  line-height: 1;
+}
+
+/* 上位への経路の区切り「›」。細くて見にくいので、本文の 1.5 倍の太字にする */
+.outline-sep {
+  font-size: 1.5em;
+  font-weight: 700;
   line-height: 1;
 }
 

@@ -99,7 +99,7 @@ export function Outline({ centerId, edges, refs, onTap }: Props) {
               <li key={p.join('/')}>
                 {p.map((id, i) => (
                   <span key={`${id}:${i}`}>
-                    {i > 0 && <span className="muted"> › </span>}
+                    {i > 0 && <span className="muted outline-sep"> › </span>}
                     {name(id)}
                   </span>
                 ))}

@@ -37,9 +37,11 @@ export function graphInput(centerId: string, edges: readonly Edge[], refs: Map<s
 /** グラフ画面（7-13）。関係モードと階層モード（アウトライン） */
 export function Graph() {
   const { itemId = '' } = useParams();
-  const [params, setParams] = useSearchParams();
+  const [params] = useSearchParams();
   const mode: GraphMode = params.get('mode') === 'hierarchy' ? 'hierarchy' : 'relation';
   const navigate = useNavigate();
+  // 開いたときの中心。中心の移動は同じ画面の中で URL を置き換えるだけなので、画面を出るまで残る
+  const [origin] = useState(itemId);
   const [data, setData] = useState<{ edges: Edge[]; refs: Map<string, ItemRef> } | null>(null);
   const [width, setWidth] = useState(358);
   const [moreSide, setMoreSide] = useState<GraphSide | null>(null);
@@ -85,7 +87,12 @@ export function Graph() {
     navigate(`/graph/${id}?mode=${mode}`, { replace: true });
   };
 
-  const setMode = (m: GraphMode) => setParams({ mode: m }, { replace: true });
+  /** モードを切り替えると、中心は開いたときの項目に戻る（7-13） */
+  const setMode = (m: GraphMode) => {
+    if (m === mode) return;
+    setMoreSide(null);
+    navigate(`/graph/${origin}?mode=${m}`, { replace: true });
+  };
 
   return (
     <div className="screen">
