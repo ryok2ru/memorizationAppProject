@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ancestorPaths, childrenMap, limitLevel, outlineChildren, treePrefix } from '../../app/graph';
+import { ancestorPaths, ancestorTree, childrenMap, limitLevel, outlineChildren, treeGuides, type AncestorNode } from '../../app/graph';
 import type { ItemRef } from '../../app/relations';
 import type { Edge } from '../../domain/types';
 
@@ -10,10 +10,11 @@ interface Props {
   onTap: (id: string) => void;
 }
 
-/** グラフ画面の階層モード（アウトライン。7-13）。上位への経路と、中心を根にした下位の木。連結は出さない */
+/** グラフ画面の階層モード（アウトライン。7-13）。中心を根にした上位の木と下位の木。連結は出さない */
 export function Outline({ centerId, edges, refs, onTap }: Props) {
   const nameOf = (id: string) => refs.get(id)?.name ?? '';
   const paths = useMemo(() => ancestorPaths(edges, centerId, nameOf), [edges, centerId, refs]); // nameOf は refs から決まる
+  const ancestors = useMemo(() => ancestorTree(paths.paths), [paths]);
   const children = useMemo(() => childrenMap(edges), [edges]);
   // 開いている枝と、「ほか N件」で全件を出している段。同じ項目が木の複数の場所に出るので、根からの経路で区別する
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -35,6 +36,26 @@ export function Outline({ centerId, edges, refs, onTap }: Props) {
     );
   };
 
+  /** 木の線。1 段 24px の枠に CSS で │ ├ └ を描く。ancestorsLast は根に近い段から「その段で最後の行か」 */
+  const guides = (ancestorsLast: boolean[], isLast: boolean) =>
+    treeGuides(ancestorsLast, isLast).map((g, i) => <span key={i} className={`outline-guide is-${g}`} aria-hidden="true" />);
+
+  /** 上位の木の 1 段。開閉はなく、すべて開いた状態で出す */
+  const upLevel = (nodes: AncestorNode[], key: string, ancestorsLast: boolean[]): JSX.Element[] =>
+    nodes.map((n, i) => {
+      const nodeKey = `${key}/${n.id}`;
+      const isLast = i === nodes.length - 1;
+      return (
+        <div key={nodeKey}>
+          <div className="outline-row">
+            {guides(ancestorsLast, isLast)}
+            {name(n.id)}
+          </div>
+          {upLevel(n.children, nodeKey, [...ancestorsLast, isLast])}
+        </div>
+      );
+    });
+
   /** key の項目の下位を 1 段ぶん並べる。ancestorsLast は木の線に使う */
   const level = (parentId: string, key: string, ancestorsLast: boolean[]): JSX.Element => {
     const list = outlineChildren(children, parentId, nameOf);
@@ -49,9 +70,7 @@ export function Outline({ centerId, edges, refs, onTap }: Props) {
           return (
             <div key={childKey}>
               <div className="outline-row">
-                <span className="outline-tree" aria-hidden="true">
-                  {treePrefix(ancestorsLast, isLast)}
-                </span>
+                {guides(ancestorsLast, isLast)}
                 {count > 0 ? (
                   <button
                     type="button"
@@ -74,9 +93,7 @@ export function Outline({ centerId, edges, refs, onTap }: Props) {
         })}
         {rest > 0 && (
           <div className="outline-row">
-            <span className="outline-tree" aria-hidden="true">
-              {treePrefix(ancestorsLast, true)}
-            </span>
+            {guides(ancestorsLast, true)}
             <button type="button" className="btn-text outline-more" onClick={() => setShowAll((s) => toggle(s, key))}>
               ほか {rest}件
             </button>
@@ -94,19 +111,11 @@ export function Outline({ centerId, edges, refs, onTap }: Props) {
         {paths.paths.length === 0 ? (
           <p className="small muted">なし</p>
         ) : (
-          <ul className="outline-paths">
-            {paths.paths.map((p) => (
-              <li key={p.join('/')}>
-                {p.map((id, i) => (
-                  <span key={`${id}:${i}`}>
-                    {i > 0 && <span className="muted outline-sep"> › </span>}
-                    {name(id)}
-                  </span>
-                ))}
-              </li>
-            ))}
-            {paths.total > paths.paths.length && <li className="small muted">ほか {paths.total - paths.paths.length}本</li>}
-          </ul>
+          <>
+            <div className="outline-row">{name(centerId)}</div>
+            {upLevel(ancestors, centerId, [])}
+            {paths.total > paths.paths.length && <p className="small muted">ほか {paths.total - paths.paths.length}本</p>}
+          </>
         )}
       </section>
       <section className="section">

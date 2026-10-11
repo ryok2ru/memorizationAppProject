@@ -2,13 +2,14 @@ import { describe, expect, it } from 'vitest';
 import type { Edge } from '../domain/types';
 import {
   ancestorPaths,
+  ancestorTree,
   childrenMap,
   LINK_GAP,
   layoutRelationGraph,
   limitLevel,
   outlineChildren,
   splitSide,
-  treePrefix,
+  treeGuides,
   type GraphBox,
   type GraphInput,
   type GraphItem,
@@ -132,10 +133,31 @@ describe('アウトライン（7-13）', () => {
     expect(limitLevel([1, 2], false)).toEqual({ shown: [1, 2], rest: 0 });
   });
 
+  it('上位の木は中心のすぐ上の上位から並べ、共通の上位をまとめる', () => {
+    // 生物 → 動物 → 犬、ペット → 犬、生物 → ペット
+    const edges = [h('生物', '動物'), h('動物', '犬'), h('ペット', '犬'), h('生物', 'ペット')];
+    expect(ancestorTree(ancestorPaths(edges, '犬', name).paths)).toEqual([
+      { id: 'ペット', children: [{ id: '生物', children: [] }] },
+      { id: '動物', children: [{ id: '生物', children: [] }] },
+    ]);
+    // 中心の上位は p だけで、p の上位が g1 と g2 → p は 1 行にまとまり、その下に 2 つ
+    const merged = [h('p', 'c'), h('g1', 'p'), h('g2', 'p')];
+    expect(ancestorTree(ancestorPaths(merged, 'c', name).paths)).toEqual([
+      {
+        id: 'p',
+        children: [
+          { id: 'g1', children: [] },
+          { id: 'g2', children: [] },
+        ],
+      },
+    ]);
+    expect(ancestorTree([])).toEqual([]);
+  });
+
   it('木の線', () => {
-    expect(treePrefix([], false)).toBe('├');
-    expect(treePrefix([], true)).toBe('└');
-    expect(treePrefix([false], true)).toBe('│└');
-    expect(treePrefix([true, false], false)).toBe('　│├');
+    expect(treeGuides([], false)).toEqual(['branch']);
+    expect(treeGuides([], true)).toEqual(['last']);
+    expect(treeGuides([false], true)).toEqual(['line', 'last']);
+    expect(treeGuides([true, false], false)).toEqual(['blank', 'line', 'branch']);
   });
 });
