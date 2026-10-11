@@ -1834,6 +1834,12 @@ h2.heading {
   border-bottom: 1px solid var(--border);
 }
 
+/* メモの上は gap 12px + 6px = 18px（今までの 1.5 倍）。下は、学習の状態の枠までが画面の gap 16px + 16px = 32px（今までの 2 倍） */
+.detail-page .detail-memo {
+  margin-top: 6px;
+  margin-bottom: 16px;
+}
+
 /* 学習の状態の枠（7-12） */
 .detail-state {
   display: flex;
@@ -2180,18 +2186,6 @@ dialog.add-relation-dialog[open] {
   white-space: nowrap;
 }
 
-.graph-plus {
-  position: absolute;
-  min-height: 0;
-  min-width: 0;
-  padding: 0;
-  border: 1px solid var(--accent);
-  border-radius: 50%;
-  color: var(--accent);
-  font-size: 16px;
-  line-height: 1;
-}
-
 /* 階層モード（アウトライン） */
 .outline {
   display: flex;
@@ -2211,7 +2205,7 @@ dialog.add-relation-dialog[open] {
 .outline-row {
   display: flex;
   align-items: center;
-  min-height: 40px;
+  min-height: 44px;
 }
 
 .outline-tree {
@@ -2221,13 +2215,28 @@ dialog.add-relation-dialog[open] {
   white-space: pre;
 }
 
+/* 開閉ボタン。押しやすく見やすいよう、強調色の枠で囲み、▸▾ は 28px にする */
 .outline-toggle {
   flex: none;
-  min-height: 40px;
-  min-width: 0;
-  padding: 0 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 36px;
+  min-height: 36px;
+  min-width: 48px;
+  margin-right: 6px;
+  padding: 0 8px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
   color: var(--accent);
-  font-size: 14px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.outline-toggle-icon {
+  font-size: 28px;
+  line-height: 1;
 }
 
 .outline-name {

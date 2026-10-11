@@ -60,7 +60,10 @@ export function Outline({ centerId, edges, refs, onTap }: Props) {
                     aria-label={open ? '閉じる' : '開く'}
                     onClick={() => setExpanded((s) => toggle(s, childKey))}
                   >
-                    {open ? '▾' : `▸ ${count}`}
+                    <span className="outline-toggle-icon" aria-hidden="true">
+                      {open ? '▾' : '▸'}
+                    </span>
+                    {!open && count}
                   </button>
                 ) : null}
                 {name(childId)}

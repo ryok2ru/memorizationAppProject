@@ -24,7 +24,7 @@ export interface AddRelationDialogHandle {
 }
 
 interface Props {
-  /** 関係を足す項目（表示中の項目、グラフでは中心） */
+  /** 関係を足す項目（表示中の項目） */
   selfId: string;
   /** 追加したあと（図や一覧を描き直す） */
   onAdded: () => void;
